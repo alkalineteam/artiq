@@ -1037,7 +1037,7 @@ class SinaraTester(EnvExperiment):
         delay_mu(int64(self.core.ref_multiplier))
         if adc.read_id() >> 4 != 0x038d:
             print("Remote AFE Board's ADC is not found. Check Remote AFE Board's Cables Connections")
-            assert adc.read_id() >> 4 == 0x038d
+            raise ValueError("Unexpected AFE ADC ID")
 
         delay_mu(int64(self.core.ref_multiplier))
         adc.calibrate(dcbias, trigger, config)
