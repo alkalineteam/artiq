@@ -44,6 +44,7 @@ nac3_builtins = {
     "tuple": tuple,
     "Exception": Exception,
     "range": range,
+    "enumerate": enumerate,
     "round": round,
     "round64": round64,
     "floor": floor,
