@@ -1,6 +1,8 @@
+from types import SimpleNamespace
+
 from migen import *
 from migen.build.generic_platform import *
-from migen.genlib.io import DifferentialOutput
+from migen.genlib.io import DifferentialOutput, DifferentialInput
 
 from artiq.gateware import rtio
 from artiq.gateware.rtio.phy import spi2, ad53xx_monitor, dds, grabber
@@ -516,7 +518,20 @@ class Grabber(_EEM):
 
         pads = target.platform.request("grabber{}_video".format(eem))
         target.platform.add_period_constraint(pads.clk_p, 14.71)
-        phy = grabber.Grabber(pads, roi_engine_count=roi_engine_count)
+
+        # Use dummy pads for 1-EEM mode Grabbers to ensure consistent CSRs
+        # across the grabber CSR group.
+        uart_pads = SimpleNamespace(tx=Signal(), rx=Signal())
+        if eem_aux is not None:
+            tx = target.platform.request("grabber{}_sertx".format(eem))
+            rx = target.platform.request("grabber{}_serrx".format(eem))
+            target.specials += [
+                DifferentialOutput(uart_pads.tx, tx.p, tx.n),
+                DifferentialInput(rx.p, rx.n, uart_pads.rx)
+            ]
+
+        phy = grabber.Grabber(pads, uart_pads, roi_engine_count=roi_engine_count, clk_freq=target.clk_freq)
+
         name = "grabber{}".format(len(target.grabber_csr_group))
         setattr(target.submodules, name, phy)
 

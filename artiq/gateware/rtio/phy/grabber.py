@@ -1,10 +1,15 @@
+from types import SimpleNamespace
+
 from migen import *
 from migen.genlib.cdc import MultiReg, PulseSynchronizer
 from migen.genlib.fsm import FSM
 
+from misoc.cores.uart import RS232PHY
+
 from artiq.gateware.rtio import rtlink
 from artiq.gateware.grabber import deserializer_7series
 from artiq.gateware.grabber.core import *
+from artiq.gateware.grabber.uart import *
 
 
 __all__ = ["Grabber"]
@@ -59,7 +64,7 @@ class Serializer(Module):
 
 
 class Grabber(Module):
-    def __init__(self, pins, roi_engine_count=16, res_width=12, count_shift=0):
+    def __init__(self, pins, uart_pads, roi_engine_count=16, res_width=12, count_shift=0, clk_freq=125e6):
         self.config = rtlink.Interface(
             rtlink.OInterface(res_width,
                               bits_for(4*roi_engine_count-1)))
@@ -90,8 +95,13 @@ class Grabber(Module):
         self.sync.rio += If(self.gate_data.o.stb,
             self.serializer.gate.eq(self.gate_data.o.data))
 
+        self.submodules.uart_phy = RS232PHY(uart_pads, clk_freq, 9600)
+        self.submodules.uart = GrabberUART(self.uart_phy)
+
     def get_csrs(self):
         return (
             self.deserializer.get_csrs() +
             self.frequency_counter.get_csrs() +
-            self.parser.get_csrs())
+            self.parser.get_csrs() +
+            self.uart_phy.get_csrs() +
+            self.uart.get_csrs())
