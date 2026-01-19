@@ -188,6 +188,9 @@ static mut API: &'static [(&'static str, *const ())] = &[
     api!(cxp_start_roi_viewer = ::cxp::start_roi_viewer),
     api!(cxp_download_roi_viewer_frame = ::cxp::download_roi_viewer_frame),
 
+    api!(grabber_read = ::grabber_read),
+    api!(grabber_write = ::grabber_write),
+
     /*
      * syscall for unit tests
      * Used in `artiq.tests.coredevice.test_exceptions.ExceptionTest.test_raise_exceptions_kernel`

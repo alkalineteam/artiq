@@ -329,7 +329,7 @@ extern fn stop_fn(_version: c_int,
 }
 
 // Must be kept in sync with `artiq.compiler.embedding`
-static EXCEPTION_ID_LOOKUP: [(&str, u32); 23] = [
+static EXCEPTION_ID_LOOKUP: [(&str, u32); 24] = [
     ("RTIOUnderflow", 0),
     ("RTIOOverflow", 1),
     ("RTIODestinationUnreachable", 2),
@@ -352,7 +352,8 @@ static EXCEPTION_ID_LOOKUP: [(&str, u32); 23] = [
     ("ZeroDivisionError", 19),
     ("LinAlgError", 20),
     ("UnwrapNoneError", 21),
-    ("CXPError", 22)
+    ("CXPError", 22),
+    ("GrabberSerialError", 23)
 ];
 
 pub fn get_exception_id(name: &str) -> u32 {

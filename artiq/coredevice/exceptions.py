@@ -200,3 +200,7 @@ class UnwrapNoneError(Exception):
 class CXPError(Exception):
     """Raised when CXP transaction fails."""
     artiq_builtin = True
+
+class GrabberSerialError(Exception):
+    """Raised when Grabber serial transaction fails."""
+    artiq_builtin = True

@@ -2,7 +2,18 @@ from numpy import int32, int64
 
 from artiq.language.core import *
 from artiq.language.types import *
+from artiq.coredevice.exceptions import GrabberSerialError
 from artiq.coredevice.rtio import rtio_output, rtio_input_timestamped_data
+
+
+@syscall(flags={"nowrite"})
+def grabber_read(destination: TInt32, id: TInt32) -> TInt32:
+    raise NotImplementedError("syscall not simulated")
+
+
+@syscall(flags={"nowrite"})
+def grabber_write(destination: TInt32, id: TInt32, data: TInt32) -> TNone:
+    raise NotImplementedError("syscall not simulated")
 
 
 class OutOfSyncException(Exception):
@@ -21,9 +32,11 @@ class Grabber:
     kernel_invariants = {"core", "channel_base", "sentinel"}
 
     def __init__(self, dmgr, channel_base, res_width=12, count_shift=0,
-                 core_device="core"):
+                 core_device="core", index=0):
         self.core = dmgr.get(core_device)
         self.channel_base = channel_base
+        self.drtio_destination = channel_base >> 16
+        self.index = index
 
         count_width = min(31, 2*res_width + 16 - count_shift)
         # This value is inserted by the gateware to mark the start of a series of
@@ -123,3 +136,19 @@ class Grabber:
                 raise GrabberTimeoutException(
                     "Timeout retrieving ROIs (attempting to read more ROIs than enabled?)")
             data[i] = roi_output
+
+    @kernel
+    def write_serial(self, data):
+        return grabber_write(self.drtio_destination, self.index, data)
+
+    @kernel
+    def read_serial(self):
+        return grabber_read(self.drtio_destination, self.index)
+
+    @kernel
+    def flush_serial(self):
+        while True:
+            try:
+                self.read_serial()
+            except GrabberSerialError:
+                break
