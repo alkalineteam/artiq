@@ -472,41 +472,29 @@ def symbolize(debug_library, addresses):
     # inside the call instruction (or its delay slot), since that's what
     # the backtrace entry should point at.
     last_inlined = None
-    offset_addresses = [hex(addr - 1) for addr in addresses]
-    with RunTool(["llvm-addr2line", "--addresses",  "--functions", "--inlines",
-                  "--demangle", "--exe={debug_library}"] + offset_addresses,
-                 debug_library=debug_library) \
-            as results:
-        lines = iter(results["__stdout__"].read().rstrip().split("\n"))
-        backtrace = []
-        while True:
-            try:
-                address_or_function = next(lines)
-            except StopIteration:
-                break
-            if address_or_function[:2] == "0x":
-                address  = int(address_or_function[2:], 16) + 1 # remove offset
-                function = next(lines)
-                inlined = False
-            else:
-                address  = backtrace[-1][4] # inlined
-                function = address_or_function
-                inlined = True
-            location = next(lines)
+    offset_addresses = [addr - 1 for addr in addresses]
+    call_records = nac3artiq.symbolize(debug_library, offset_addresses)
+    backtrace = []
+    for record in call_records:
+        address = record.address
+        inlined = False
+        if address is None:
+            address = backtrace[-1][4] # inlined
+            inlined = True
+        else:
+            address += 1
+        filename = record.file
+        dirname = record.dir
+        if dirname is not None:
+            filename = dirname + "/" + filename
+        function, line, column = record.name, record.line, record.column
 
-            filename, line = location.rsplit(":", 1)
-            if filename == "??" or filename == "<synthesized>":
-                continue
-            if line == "?":
-                line = -1
-            else:
-                line = int(line)
-            # can't get column out of addr2line D:
-            if inlined:
-                last_inlined.append((filename, line, -1, function, address))
-            else:
-                last_inlined = []
-                backtrace.append((filename, line, -1, function, address,
-                                  last_inlined))
-        return backtrace
+        if inlined:
+            last_inlined.append((filename, line, column, function, address))
+        else:
+            last_inlined = []
+            backtrace.append((filename, line, column, function, address,
+                                last_inlined))
+
+    return backtrace
 
