@@ -302,7 +302,7 @@ Note that the client key and certificate *must* match the client certificate giv
 
     To connect with multiple clients and/or controller managers or other SSL capable applications, 
     you may concatenate their certificate files into a single ``.pem`` file and use that for all connections. 
-    See `Sipyco SSL document <https://github.com/m-labs/sipyco/blob/master/doc/index.rst#ssl-setup>`_.
+    See `Sipyco SSL document <https://m-labs.hk/artiq/sipyco-manual/#ssl-setup>`_.
 
 .. .. note--
 

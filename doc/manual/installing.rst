@@ -20,7 +20,7 @@ User environment installation
 
 There are few options for accessing ARTIQ through Nix. The easiest way is to install it into the user environment: ::
 
-  $ nix profile install git+https://github.com/m-labs/artiq.git
+  $ nix profile install git+https://git.m-labs.hk/M-Labs/artiq.git
 
 Answer "Yes" to the questions about setting Nix configuration options (for more details see :ref:`installing-details` below.) You should now have a minimal installation of ARTIQ, where the usual front-end commands (:mod:`~artiq.frontend.artiq_run`, :mod:`~artiq.frontend.artiq_master`, :mod:`~artiq.frontend.artiq_dashboard`, etc.) are all available to you.
 
@@ -108,7 +108,7 @@ To find more packages you can browse the `Nix package search <https://search.nix
 
     $ nix profile list
 
-  finding the entry with its ``Original flake URL`` listed as the GitHub ARTIQ repository, copying its name, and running: ::
+  finding the entry with its ``Original flake URL`` listed as the Gitea ARTIQ repository, copying its name, and running: ::
 
     $ nix profile remove [name]
 
