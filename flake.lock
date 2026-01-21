@@ -208,17 +208,17 @@
     "src-pythonparser": {
       "flake": false,
       "locked": {
-        "lastModified": 1628745371,
-        "narHash": "sha256-p6TgeeaK4NEmbhimEXp31W8hVRo4DgWmcCoqZ+UdN60=",
-        "owner": "m-labs",
-        "repo": "pythonparser",
-        "rev": "5413ee5c9f8760e95c6acd5d6e88dabb831ad201",
-        "type": "github"
+        "lastModified": 1767427016,
+        "narHash": "sha256-E57okn+3gwvtXnF/qF/jypNYqijCLUYOEYLF9ZCzHpE=",
+        "ref": "refs/heads/master",
+        "rev": "a2ace427c84ee5b1e9bd9dbc9b9337e50fc54077",
+        "revCount": 152,
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/pythonparser.git"
       },
       "original": {
-        "owner": "m-labs",
-        "repo": "pythonparser",
-        "type": "github"
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/pythonparser.git"
       }
     },
     "systems": {

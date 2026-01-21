@@ -41,7 +41,8 @@
     };
 
     src-pythonparser = {
-      url = "github:m-labs/pythonparser";
+      url = "https://git.m-labs.hk/M-Labs/pythonparser.git";
+      type = "git";
       flake = false;
     };
   };
@@ -235,9 +236,8 @@
     asyncserial = pkgs.python3Packages.buildPythonPackage rec {
       pname = "asyncserial";
       version = "1.0";
-      src = pkgs.fetchFromGitHub {
-        owner = "m-labs";
-        repo = "asyncserial";
+      src = pkgs.fetchgit {
+        url = "https://git.m-labs.hk/M-Labs/asyncserial.git";
         rev = version;
         sha256 = "sha256-ZHzgJnbsDVxVcp09LXq9JZp46+dorgdP8bAiTB59K28=";
       };
