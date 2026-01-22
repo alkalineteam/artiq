@@ -449,7 +449,6 @@ class HandoverException(EnvExperiment):
         except DummyException:
             pass
 
-
 class RTIOBatching(EnvExperiment):
     def build(self):
         self.setattr_device("core")
@@ -457,44 +456,63 @@ class RTIOBatching(EnvExperiment):
         self.setattr_device("ttl_out")
 
     @kernel
-    def run(self):
+    def batching(self):
         self.core.reset()
         delay(10*ms)
         with self.core_batch:
             for i in range(500):
                 self.ttl_out.pulse(250*ns)
                 delay(50*ns)
-
-
-class RTIOBatchFull(EnvExperiment):
-    def build(self):
-        self.setattr_device("core")
-        self.setattr_device("core_batch")
-        self.setattr_device("ttl_out")
-
     @kernel
-    def run(self):
+    def full(self):
         self.core.reset()
         with self.core_batch:
             while True:
                 self.ttl_out.pulse(8*ns)
                 delay(8*ns)
 
-
-class RTIOBatchUnderflow(EnvExperiment):
-    def build(self):
-        self.setattr_device("core")
-        self.setattr_device("core_batch")
-        self.setattr_device("ttl_out")
-
     @kernel
-    def run(self):
+    def underflow(self):
         self.core.reset()
         delay(1*ms)
         with self.core_batch:
             for i in range(1000):
                 self.ttl_out.pulse(8*ns)
 
+    @kernel
+    def time_empty_batch(self):
+        t1 = self.core.get_rtio_counter_mu()
+        with self.core_batch:
+            pass
+        t2 = self.core.get_rtio_counter_mu()
+        self.set_dataset("batch_time", self.core.mu_to_seconds(t2 - t1))
+
+class BatchTest(ExperimentCase):
+    def test_acpki_batching(self):
+        exp = self.create(RTIOBatching)
+        exp.batching()
+
+    def test_acpki_batch_full(self):
+        exp = self.create(RTIOBatching)
+        with self.assertRaises(RuntimeError):
+            exp.full()
+
+    def test_acpki_batch_underflow(self):
+        exp = self.create(RTIOBatching)
+        with self.assertRaises(RTIOUnderflow):
+            exp.underflow()
+
+    def test_acpki_batch_overhead(self):
+        exp = self.create(RTIOBatching)
+        n = 100
+        total_dt = 0
+        for _ in range(n):
+            exp.time_empty_batch()
+            dt = self.dataset_mgr.get("batch_time")
+            total_dt += dt
+        dt = total_dt/n
+        print(dt, "s")
+        self.assertLess(dt, 1*us)
 
 class CoredeviceTest(ExperimentCase):
     def test_rtio_counter(self):
@@ -608,17 +626,6 @@ class CoredeviceTest(ExperimentCase):
         self.execute(Rounding)
         dt = self.dataset_mgr.get("delta")
         self.assertEqual(dt, 8000)
-
-    def test_acpki_batching(self):
-        self.execute(RTIOBatching)
-
-    def test_acpki_batch_full(self):
-        with self.assertRaises(RuntimeError):
-            self.execute(RTIOBatchFull)
-
-    def test_acpki_batch_underflow(self):
-        with self.assertRaises(RTIOUnderflow):
-            self.execute(RTIOBatchUnderflow)
 
 
 class RPCTiming(EnvExperiment):
@@ -806,6 +813,22 @@ class DMATest(ExperimentCase):
             self.assertLess(dt/count, 4.5*us)
         else:
             self.assertLess(dt/count, 3*us)
+    
+    def test_dma_record_overhead(self):
+        exp = self.create(_DMA)
+        is_zynq = exp.core.target_cls == CortexA9Target
+        n = 100
+        total_dt = 0
+        for i in range(n):
+            exp.record_many(0)  # just library calls
+            dt = self.dataset_mgr.get("dma_record_time")
+            total_dt += dt
+        dt = total_dt/n
+        print(dt, "s")
+        if is_zynq:
+            self.assertLess(dt, 4.5*us)
+        else:
+            self.assertLess(dt, 4.5*ms)
 
     def test_dma_playback_rate(self):
         exp = self.create(_DMA)
