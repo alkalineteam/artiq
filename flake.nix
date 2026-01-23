@@ -3,7 +3,7 @@
 
   inputs = {
     nac3 = {
-      url = "https://git.m-labs.hk/m-labs/nac3.git";
+      url = "https://git.m-labs.hk/M-Labs/nac3.git";
       type = "git";
     };
 
@@ -18,23 +18,26 @@
     };
 
     artiq-comtools = {
-      url = "github:m-labs/artiq-comtools";
+      url = "https://git.m-labs.hk/M-Labs/artiq-comtools.git";
+      type = "git";
       inputs.nixpkgs.follows = "nac3/nixpkgs";
       inputs.sipyco.follows = "sipyco";
     };
 
     sipyco = {
-      url = "github:m-labs/sipyco";
+      url = "https://git.m-labs.hk/M-Labs/sipyco.git";
+      type = "git";
       inputs.nixpkgs.follows = "nac3/nixpkgs";
     };
 
     src-migen = {
-      url = "github:m-labs/migen";
+      url = "https://git.m-labs.hk/M-Labs/migen.git";
+      type = "git";
       flake = false;
     };
 
     src-misoc = {
-      url = "https://github.com/m-labs/misoc.git";
+      url = "https://github.com/M-Labs/misoc.git";
       type = "git";
       submodules = true;
       flake = false;
