@@ -276,3 +276,31 @@ Try this: ::
     Only output events are redirected to the DMA core. Input methods inside a ``with dma`` block will be called as they would be outside of the block, in the current real-time context, and input events will be buffered normally, not to DMA.
 
 For more documentation on the methods used, see the :mod:`artiq.coredevice.dma` reference.
+
+
+Batching
+--------
+
+.. important::
+    This feature is only available on Zynq platforms with ACPKI enabled.
+
+Batching, like DMA, allows for saving a sequence of RTIO output events and triggering their execution all at once, for higher throughput. It functions by a different mechanism than DMA which provides lower setup cost but lower speed; this makes it useful for short bursts of RTIO events which would cause an underflow in normal operation, but where the setup cost for DMA is too high.
+
+Try this: ::
+
+    from artiq.experiment import *
+
+
+    class Batching(EnvExperiment):
+        def build(self):
+            self.setattr_device("core")
+            self.setattr_device("core_batch")
+        
+        @kernel
+        def run(self):
+            self.core.reset()
+            delay(10*ms)
+            with self.core_batch:
+                for i in range(500):
+                    self.ttl_out.pulse(250*ns)
+                    delay(50*ns)

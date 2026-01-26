@@ -30,6 +30,12 @@ System drivers
 .. automodule:: artiq.coredevice.cache
     :members:
 
+:mod:`artiq.coredevice.rtio.RTIOBatch` module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. automodule:: artiq.coredevice.rtio.RTIOBatch
+    :members:
+
 
 Digital I/O drivers
 -------------------
