@@ -33,6 +33,10 @@ ARTIQ-9 (Unreleased)
      property in the system description JSON file.
    - Idle kernels now restart when written with ``artiq_coremgmt`` and stop when erased/removed
      from config.
+   - On Zynq platforms with ACPKI, RTIO events can be now batched before execution for
+     higher throughput, with lower overhead than DMA.
+   - On Zynq platforms, the overhead for switching between normal operation and DMA or batching
+     contexts is now lower by an order of magnitude.
 * Dashboard:
    - Experiment windows can have different colors, selected by the user.
    - The Log pane now adapts to dark system color themes.
