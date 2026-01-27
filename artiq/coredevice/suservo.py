@@ -858,10 +858,6 @@ class SharedDDS:
     disabling the corresponding MASK_NU bit.
 
     :param cpld_device: Name of the Urukul CPLD this device is on.
-    :param pll_n: DDS PLL multiplier. The DDS sample clock is
-        ``f_ref / clk_div * pll_n`` where ``f_ref`` is the reference frequency and
-        ``clk_div`` is the reference clock divider (both set in the parent
-        Urukul CPLD instance).
     :param pll_en: PLL enable bit, set to 0 to bypass PLL (default: 1).
         Note that when bypassing the PLL the red front panel LED may remain on.
     :param pll_cp: DDS PLL charge pump setting.
@@ -884,11 +880,11 @@ class SharedDDS:
     :param core_device: Core device name
     """
     def __init__(self, dmgr, cpld_device,
-                 pll_n=40, pll_cp=7, pll_vco=5, sync_delay_seeds=[-1, -1, -1, -1],
+                 pll_cp=7, pll_vco=5, sync_delay_seeds=[-1, -1, -1, -1],
                  io_update_delay=0, pll_en=1, core_device="core"):
         self.core = dmgr.get(core_device)
         self.cpld = dmgr.get(cpld_device)
-        self._inner_dds = ad9910.AD9910(dmgr, 3, cpld_device, pll_n=pll_n, pll_cp=pll_cp, pll_vco=pll_vco, pll_en=pll_en)
+        self._inner_dds = ad9910.AD9910(dmgr, 3, cpld_device, pll_cp=pll_cp, pll_vco=pll_vco, pll_en=pll_en)
 
         self.selected_ch = 0
         self._inner_dds.io_update = _MaskedIOUpdate(self.core, self._inner_dds.cpld, self, self._inner_dds.io_update)

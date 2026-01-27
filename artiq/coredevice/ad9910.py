@@ -113,10 +113,6 @@ class AD9910:
     :param cpld_device: Name of the Urukul CPLD this device is on.
     :param sw_device: Name of the RF switch device. The RF switch is a
         TTLOut channel available as the ``sw`` attribute of this instance.
-    :param pll_n: DDS PLL multiplier. The DDS sample clock is
-        ``f_ref / clk_div * pll_n`` where ``f_ref`` is the reference frequency and
-        ``clk_div`` is the reference clock divider (both set in the parent
-        Urukul CPLD instance).
     :param pll_en: PLL enable bit, set to 0 to bypass PLL (default: 1).
         Note that when bypassing the PLL the red front panel LED may remain on.
     :param pll_cp: DDS PLL charge pump setting.
@@ -137,7 +133,7 @@ class AD9910:
     """
 
     def __init__(self, dmgr, chip_select, cpld_device, sw_device=None,
-                 pll_n=40, pll_cp=7, pll_vco=5, sync_delay_seed=-1,
+                 pll_cp=7, pll_vco=5, sync_delay_seed=-1,
                  io_update_delay=0, pll_en=1):
         self.kernel_invariants = {"cpld", "core", "bus", "chip_select",
                                   "pll_en", "pll_n", "pll_vco", "pll_cp",
@@ -153,10 +149,11 @@ class AD9910:
             self.kernel_invariants.add("sw")
         clk = self.cpld.refclk / [4, 1, 2, 4][self.cpld.clk_div]
         self.pll_en = pll_en
-        self.pll_n = pll_n
         self.pll_vco = pll_vco
         self.pll_cp = pll_cp
         if pll_en:
+            pll_n = int(round(1e9/clk))
+            self.pll_n = pll_n
             sysclk = clk * pll_n
             assert clk <= 60e6
             assert 12 <= pll_n <= 127
@@ -166,6 +163,7 @@ class AD9910:
             assert vco_min <= sysclk / 1e6 <= vco_max
             assert 0 <= pll_cp <= 7
         else:
+            self.pll_n = 0  # unused with PLL off
             sysclk = clk
         assert sysclk <= 1e9
         self.ftw_per_hz = (1 << 32) / sysclk

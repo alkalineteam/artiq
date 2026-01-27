@@ -21,16 +21,12 @@ class AD9912:
     :param cpld_device: Name of the Urukul CPLD this device is on.
     :param sw_device: Name of the RF switch device. The RF switch is a
         TTLOut channel available as the :attr:`sw` attribute of this instance.
-    :param pll_n: DDS PLL multiplier. The DDS sample clock is
-        ``f_ref / clk_div * pll_n`` where ``f_ref`` is the reference frequency and 
-        ``clk_div`` is the reference clock divider (both set in the parent 
-        Urukul CPLD instance).
     :param pll_en: PLL enable bit, set to 0 to bypass PLL (default: 1).
         Note that when bypassing the PLL the red front panel LED may remain on.
     """
 
     def __init__(self, dmgr, chip_select, cpld_device, sw_device=None,
-                 pll_n=10, pll_en=1):
+                 pll_en=1):
         self.kernel_invariants = {"cpld", "core", "bus", "chip_select",
                                   "pll_n", "pll_en", "ftw_per_hz"}
         self.cpld = dmgr.get(cpld_device)
@@ -42,15 +38,22 @@ class AD9912:
             self.sw = dmgr.get(sw_device)
             self.kernel_invariants.add("sw")
         self.pll_en = pll_en
-        self.pll_n = pll_n
         if pll_en:
             refclk = self.cpld.refclk
             if refclk < 11e6:
-                # use SYSCLK PLL Doubler
+                # using the SYSCLK PLL Doubler
                 refclk = refclk * 2
-            sysclk = refclk / [1, 1, 2, 4][self.cpld.clk_div] * pll_n
+            clk_div_val = [1, 1, 2, 4][self.cpld.clk_div]
+            pll_n = int(round(1e9 * clk_div_val / refclk))
+            if pll_n % 2 == 1:
+                # ad9912 has a fixed divide-by-2 prescaler, all pll_n values must be even
+                raise ValueError("For given frequency {}, pll_n ({}) is not even".format(refclk, pll_n))
+            assert 4 <= pll_n <= 258
+            self.pll_n = pll_n
+            sysclk = refclk / clk_div_val * pll_n
         else:
             sysclk = self.cpld.refclk
+            self.pll_n = 0  # unused with PLL off
         assert sysclk <= 1e9
         self.ftw_per_hz = 1 / sysclk * (int64(1) << 48)
 
