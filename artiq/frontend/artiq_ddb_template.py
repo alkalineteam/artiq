@@ -590,6 +590,9 @@ class PeripheralManager:
 
         pll_vco = peripheral.get("pll_vco")
         synchronization = peripheral["synchronization"]
+        clk_div = peripheral.get("clk_div")
+        if clk_div is None:
+            clk_div = 0 if pll_en else 1
         for urukul_name in urukul_names:
             if synchronization:
                 self.gen("""
@@ -625,6 +628,7 @@ class PeripheralManager:
                         "sync_device": {sync_device},{io_upd}
                         "refclk": {refclk},
                         "clk_sel": {clk_sel},
+                        "clk_div": {clk_div},
                         "proto_rev": {proto_rev}
                     }}
                 }}
@@ -644,6 +648,7 @@ class PeripheralManager:
                 io_upd="\n        \"io_update_device\": \"ttl_{urukul_name}_io_update\",".format(urukul_name=urukul_name) if synchronization else "",
                 refclk=peripheral.get("refclk", self.primary_description["rtio_frequency"]),
                 clk_sel=peripheral["clk_sel"],
+                clk_div=clk_div,
                 proto_rev=peripheral["proto_rev"],
                 pll_vco=",\n        \"pll_vco\": {}".format(pll_vco) if pll_vco is not None else "",
                 pll_n=peripheral["pll_n"],  pll_en=peripheral["pll_en"],
