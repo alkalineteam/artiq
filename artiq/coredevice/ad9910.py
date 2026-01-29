@@ -147,7 +147,7 @@ class AD9910:
     """
 
     core: KernelInvariant[Core]
-    cpld: KernelInvariant[CPLD]
+    cpld: KernelInvariant[CPLD[ProtoRev9]]
     bus: KernelInvariant[SPIMaster]
     chip_select: KernelInvariant[int32]
     pll_en: KernelInvariant[bool]

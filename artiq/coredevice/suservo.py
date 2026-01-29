@@ -5,7 +5,7 @@ from artiq.language.units import us, ns
 from artiq.coredevice.core import Core
 from artiq.coredevice.rtio import rtio_output, rtio_input_data
 from artiq.coredevice.spi2 import SPI_END, SPIMaster
-from artiq.coredevice.urukul import CFG_MASK_NU, CPLD
+from artiq.coredevice.urukul import CFG_MASK_NU, CPLD, ProtoRev9
 from artiq.coredevice.ad9910 import AD9910
 from artiq.coredevice.sampler import adc_mu_to_volt as sampler_adc_mu_to_volt, SPI_CONFIG as SAMPLER_SPI_CONFIG, SPI_CS_PGIA as SAMPLER_SPI_CS_PGIA
 
@@ -70,7 +70,7 @@ class SUServo:
     core: KernelInvariant[Core]
     pgia: KernelInvariant[SPIMaster]
     ddses: KernelInvariant[list[AD9910]]
-    cplds: KernelInvariant[list[CPLD]]
+    cplds: KernelInvariant[list[CPLD[ProtoRev9]]]
     channel: KernelInvariant[int32]
     gains: Kernel[int32]
     ref_period_mu: KernelInvariant[int64]

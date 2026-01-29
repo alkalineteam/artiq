@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Generic, TypeVar
 from numpy import int32, int64
 
 from artiq.language.core import *
@@ -106,7 +107,7 @@ def urukul_sta_drover(sta: int32) -> int32:
 
 @compile
 class RegIOUpdate:
-    cpld: KernelInvariant[CPLD]
+    cpld: KernelInvariant[CPLD[ProtoRev9]]
     chip_select: KernelInvariant[int32]
 
     def __init__(self, cpld, chip_select):
@@ -251,7 +252,7 @@ class ProtoRev8(CPLDVersion):
     Implementation of the CPLD for Urukul ProtoRev8.
     """
 
-    cpld: KernelInvariant[CPLD]
+    cpld: KernelInvariant[CPLD[ProtoRev8]]
     # ProtoRev8 CFG configuration register bit offsets
     CFG_IO_UPDATE: Kernel[int32] = 12
     CFG_MASK_NU: Kernel[int32] = 13
@@ -428,7 +429,7 @@ class ProtoRev9(CPLDVersion):
     Implementation of the CPLD for Urukul ProtoRev9.
     """
 
-    cpld: KernelInvariant[CPLD]
+    cpld: KernelInvariant[CPLD[ProtoRev9]]
     # ProtoRev9 CFG configuration register bit offsets
     CFG_OSK: Kernel[int32] = 20
     CFG_DRCTL: Kernel[int32] = 24
@@ -675,8 +676,11 @@ class ProtoRev9(CPLDVersion):
         self.cpld._configure_all_bits(ProtoRev9.CFG_IO_UPDATE, state)
 
 
+V = TypeVar("V", ProtoRev8, ProtoRev9)
+
+
 @compile
-class CPLD:
+class CPLD(Generic[V]):
     """Urukul CPLD SPI router and configuration interface.
 
     :param spi_device: SPI bus device name
@@ -726,22 +730,7 @@ class CPLD:
     att_reg: Kernel[int32]
     sync_div: Kernel[int32]
     proto_rev: Kernel[int32]
-    # NAC3TODO
-    #
-    # Currently, only proto_rev=0x09 is supported. This is due to the following limitations:
-    #
-    # - Inheritance between base and derived classes is not fully supported.
-    # - Generics (TypeVar/Generic) can be used to work around this.
-    # - However, application of type vars to a generic class is not currently supported (e.g.):
-    #
-    #           class A(Generic[T]):
-    #               def __init__(self):
-    #                   pass
-    #               def fun(self, a: A[T]) -> A[T]:
-    #                   pass
-    #
-    # TODO: Add other proto_revs once supported.
-    version: KernelInvariant[ProtoRev9]
+    version: KernelInvariant[V]
 
     def __init__(
         self,
@@ -784,9 +773,12 @@ class CPLD:
             sync_div = 0
 
         self.proto_rev = proto_rev
-        if proto_rev == STA_PROTO_REV_8 or proto_rev != STA_PROTO_REV_9:
-            raise ValueError(f"NAC3: Urukul unsupported proto_rev: {proto_rev}")
-        self.version = ProtoRev9(self)
+        if proto_rev == STA_PROTO_REV_8:
+            self.version = ProtoRev8(self)
+        elif proto_rev == STA_PROTO_REV_9:
+            self.version = ProtoRev9(self)
+        else:
+            raise ValueError(f"Urukul unsupported proto_rev: {proto_rev}")
 
         if self.proto_rev == STA_PROTO_REV_8:
             self.cfg_reg = int64(

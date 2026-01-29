@@ -6,7 +6,7 @@ from artiq.coredevice.zotino import Zotino
 from artiq.coredevice.mirny import Mirny as MirnyCPLD
 from artiq.coredevice.almazny import AlmaznyChannel
 from artiq.coredevice.adf5356 import ADF5356
-from artiq.coredevice.urukul import CPLD as UrukulCPLD
+from artiq.coredevice.urukul import CPLD as UrukulCPLD, ProtoRev9
 from artiq.coredevice.ad9912 import AD9912
 from artiq.coredevice.ad9910 import AD9910
 from artiq.coredevice.sampler import Sampler
@@ -26,10 +26,10 @@ class NAC3Devices(EnvExperiment):
     mirny0_cpld: KernelInvariant[MirnyCPLD]
     mirny0_ch0: KernelInvariant[ADF5356]
     mirny0_almazny0: KernelInvariant[AlmaznyChannel]
-    urukul0_cpld: KernelInvariant[UrukulCPLD]
+    urukul0_cpld: KernelInvariant[UrukulCPLD[ProtoRev9]]
     eeprom_urukul0: KernelInvariant[KasliEEPROM]
     urukul0_ch0: KernelInvariant[AD9912]
-    urukul1_cpld: KernelInvariant[UrukulCPLD]
+    urukul1_cpld: KernelInvariant[UrukulCPLD[ProtoRev9]]
     urukul1_ch0: KernelInvariant[AD9910]
     sampler0: KernelInvariant[Sampler]
     # NAC3TODO
