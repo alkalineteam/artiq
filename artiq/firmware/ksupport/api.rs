@@ -45,6 +45,7 @@ static mut API: &'static [(&'static str, *const ())] = &[
     api!(__ashrdi3),
     api!(__udivmoddi4),
     api!(__floatsisf),
+    api!(__floatundidf),
     api!(__floatunsisf),
     api!(__fixsfsi),
     api!(__fixunssfsi),
