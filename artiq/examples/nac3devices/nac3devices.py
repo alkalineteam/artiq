@@ -9,6 +9,7 @@ from artiq.coredevice.adf5356 import ADF5356
 from artiq.coredevice.urukul import CPLD as UrukulCPLD, ProtoRev9
 from artiq.coredevice.ad9912 import AD9912
 from artiq.coredevice.ad9910 import AD9910
+from artiq.coredevice.ttl import TTLOut
 from artiq.coredevice.sampler import Sampler
 from artiq.coredevice.suservo import SUServo, Channel as SUServoChannel
 from artiq.coredevice.edge_counter import EdgeCounter
@@ -30,7 +31,7 @@ class NAC3Devices(EnvExperiment):
     eeprom_urukul0: KernelInvariant[KasliEEPROM]
     urukul0_ch0: KernelInvariant[AD9912]
     urukul1_cpld: KernelInvariant[UrukulCPLD[ProtoRev9]]
-    urukul1_ch0: KernelInvariant[AD9910]
+    urukul1_ch0: KernelInvariant[AD9910[TTLOut]]
     sampler0: KernelInvariant[Sampler]
     # NAC3TODO
     #suservo0: KernelInvariant[SUServo]

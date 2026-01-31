@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from typing import Generic, TypeVar
 from numpy import int32, int64
 
 from artiq.language.core import *
@@ -109,8 +112,11 @@ class SyncDataEeprom:
         self.io_update_delay = int32(io_update_delay)
 
 
+IoUpdateT = TypeVar("IoUpdateT", RegIOUpdate, TTLOut)
+
+
 @compile
-class AD9910:
+class AD9910(Generic[IoUpdateT]):
     """
     AD9910 DDS channel on Urukul.
 
@@ -159,7 +165,7 @@ class AD9910:
     sysclk: KernelInvariant[float]
     sw: KernelInvariant[Option[TTLOut]]
     sync_data: KernelInvariant[SyncDataUser]
-    io_update: KernelInvariant[TTLOut]
+    io_update: KernelInvariant[IoUpdateT]
     phase_mode: Kernel[int32]
 
     def __init__(self, dmgr, chip_select, cpld_device, sw_device=None,
@@ -201,8 +207,6 @@ class AD9910:
 
         if not self.cpld.io_update:
             self.io_update = RegIOUpdate(self.cpld, self.chip_select)
-            # NAC3TODO
-            raise NotImplementedError
         else:
             self.io_update = self.cpld.io_update
 

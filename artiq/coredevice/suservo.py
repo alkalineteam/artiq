@@ -5,7 +5,7 @@ from artiq.language.units import us, ns
 from artiq.coredevice.core import Core
 from artiq.coredevice.rtio import rtio_output, rtio_input_data
 from artiq.coredevice.spi2 import SPI_END, SPIMaster
-from artiq.coredevice.urukul import CFG_MASK_NU, CPLD, ProtoRev9
+from artiq.coredevice.urukul import CFG_MASK_NU, CPLD, ProtoRev9, RegIOUpdate
 from artiq.coredevice.ad9910 import AD9910
 from artiq.coredevice.sampler import adc_mu_to_volt as sampler_adc_mu_to_volt, SPI_CONFIG as SAMPLER_SPI_CONFIG, SPI_CS_PGIA as SAMPLER_SPI_CS_PGIA
 
@@ -69,7 +69,7 @@ class SUServo:
 
     core: KernelInvariant[Core]
     pgia: KernelInvariant[SPIMaster]
-    ddses: KernelInvariant[list[AD9910]]
+    ddses: KernelInvariant[list[AD9910[RegIOUpdate]]]
     cplds: KernelInvariant[list[CPLD[ProtoRev9]]]
     channel: KernelInvariant[int32]
     gains: Kernel[int32]
@@ -272,7 +272,7 @@ class Channel:
     servo: KernelInvariant[SUServo]
     channel: KernelInvariant[int32]
     servo_channel: KernelInvariant[int32]
-    dds: KernelInvariant[AD9910]
+    dds: KernelInvariant[AD9910[RegIOUpdate]]
 
     def __init__(self, dmgr, channel, servo_device):
         self.servo = dmgr.get(servo_device)
