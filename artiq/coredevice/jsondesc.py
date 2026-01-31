@@ -1,6 +1,6 @@
 from os import path
 import json
-from jsonschema import Draft7Validator, validators
+from jsonschema import Draft201909Validator, validators
 
 def extend_with_default(validator_class):
     validate_properties = validator_class.VALIDATORS["properties"]
@@ -23,7 +23,7 @@ schema_path = path.join(path.dirname(__file__), "coredevice_generic.schema.json"
 with open(schema_path, "r") as f:
     schema = json.load(f)
 
-validator = extend_with_default(Draft7Validator)(schema)
+validator = extend_with_default(Draft201909Validator)(schema)
 
 def load(description_path):
     with open(description_path, "r") as f:
