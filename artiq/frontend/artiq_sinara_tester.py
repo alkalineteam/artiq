@@ -11,8 +11,10 @@ from numpy import int32, int64
 from artiq.experiment import *
 from artiq.coredevice.core import Core
 from artiq.coredevice.ttl import TTLOut, TTLInOut
-from artiq.coredevice.urukul import CPLD as UrukulCPLD
+from artiq.coredevice.urukul import CPLD, ProtoRev9
 from artiq.coredevice.ad9910 import AD9910, SyncDataEeprom
+
+UrukulCPLD = CPLD[ProtoRev9]
 from artiq.coredevice.mirny import Mirny
 from artiq.coredevice.almazny import AlmaznyLegacy, AlmaznyChannel
 from artiq.coredevice.adf5356 import ADF5356

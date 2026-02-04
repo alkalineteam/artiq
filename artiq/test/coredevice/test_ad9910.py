@@ -9,11 +9,12 @@ from artiq.coredevice.ad9910 import (
     RAM_MODE_RAMPUP,
 )
 from artiq.coredevice.core import Core
+from artiq.coredevice.ttl import TTLOut
 from artiq.coredevice.urukul import (
     CPLD as UrukulCPLD,
-    # STA_PROTO_REV_8, NAC3TODO
+    STA_PROTO_REV_8,
     STA_PROTO_REV_9,
-    # ProtoRev8, NAC3TODO
+    ProtoRev8,
     ProtoRev9,
     urukul_sta_smp_err,
 )
@@ -29,8 +30,8 @@ DDS = "urukul_ch0"
 @compile
 class AD9910Exp(EnvExperiment):
     core: KernelInvariant[Core]
-    cpld: KernelInvariant[UrukulCPLD]
-    dev: KernelInvariant[AD9910]
+    cpld: KernelInvariant[UrukulCPLD[ProtoRev9]]
+    dev: KernelInvariant[AD9910[TTLOut]]
     io_update_device: Kernel[bool]
 
     def build(self, runner, io_update_device=True):
@@ -502,6 +503,62 @@ class AD9910Exp(EnvExperiment):
         self.report_list_int32("ram", ram)
 
 
+@compile
+class AD9910Exp8(EnvExperiment):
+    """ProtoRev8 version of AD9910Exp for testing ProtoRev8-specific functionality."""
+
+    core: KernelInvariant[Core]
+    cpld: KernelInvariant[UrukulCPLD[ProtoRev8]]
+    dev: KernelInvariant[AD9910[TTLOut]]
+    io_update_device: Kernel[bool]
+
+    def build(self, runner, io_update_device=True):
+        self.setattr_device("core")
+        self.cpld = self.get_device(CPLD)
+        self.dev = self.get_device(DDS)
+        self.runner = runner
+        self.io_update_device = io_update_device
+
+    def run(self):
+        getattr(self, self.runner)()
+
+    @rpc
+    def report_list_int32(self, name: str, data: list[int32]):
+        self.set_dataset(name, data)
+
+    @kernel
+    def init_fail_proto_rev(self):
+        self.core.break_realtime()
+        self.cpld.init()
+        cfg = self.cpld.cfg_reg
+        cfg &= ~int64(1 << ProtoRev8.CFG_CLK_SEL1)
+        cfg |= int64(1 << ProtoRev8.CFG_CLK_SEL0)
+
+        self.cpld.cfg_write(cfg)
+        # clk_sel=1, external SMA, should fail PLL lock
+        if not self.io_update_device:
+            # Set MASK_NU to trigger CFG.IO_UPDATE
+            self.dev.cfg_mask_nu(True)
+        self.dev.init()
+        if not self.io_update_device:
+            # Unset MASK_NU to un-trigger CFG.IO_UPDATE
+            self.dev.cfg_mask_nu(False)
+
+    @kernel
+    def sw_readback(self):
+        if self.dev.sw.is_some():
+            self.core.break_realtime()
+            self.cpld.init()
+            self.dev.init()
+            self.dev.cfg_sw(False)
+            self.dev.sw.unwrap().on()
+            sw_on = (self.cpld.sta_read() >> (self.dev.chip_select - 4)) & 1
+            self.core.delay(10.0 * us)
+            self.dev.sw.unwrap().off()
+            sw_off = (self.cpld.sta_read() >> (self.dev.chip_select - 4)) & 1
+            self.report_list_int32("sw", [sw_on, sw_off])
+
+
 class AD9910Test(ExperimentCase):
     def test_instantiate(self):
         self.execute(AD9910Exp, "instantiate")
@@ -510,13 +567,12 @@ class AD9910Test(ExperimentCase):
     def test_init(self, io_update_device):
         self.execute(AD9910Exp, "init", io_update_device=io_update_device)
 
-    # NAC3TODO
-    # @io_update_device(CPLD, True, False, proto_rev=STA_PROTO_REV_8)
-    # def test_init_fail_proto_rev8(self, io_update_device):
-    #     with self.assertRaises(ValueError):
-    #         self.execute(
-    #             AD9910Exp, "init_fail_proto_rev", io_update_device=io_update_device
-    #         )
+    @io_update_device(CPLD, True, False, proto_rev=STA_PROTO_REV_8)
+    def test_init_fail_proto_rev8(self, io_update_device):
+        with self.assertRaises(ValueError):
+            self.execute(
+                AD9910Exp8, "init_fail_proto_rev", io_update_device=io_update_device
+            )
 
     @io_update_device(CPLD, True, False)
     def test_set_get(self, io_update_device):
@@ -585,12 +641,11 @@ class AD9910Test(ExperimentCase):
         # many edges near expected position
         self.assertGreater(bins2[(dly + 3) & 3], n * 0.9)
 
-    # NAC3TODO
-    # @io_update_device(CPLD, True, False, proto_rev=STA_PROTO_REV_8)
-    # def test_sw_readback(self, io_update_device):
-    #     if "sw_device" in self.device_mgr.get_desc(DDS).get("arguments", []):
-    #         self.execute(AD9910Exp, "sw_readback", io_update_device=io_update_device)
-    #         self.assertEqual(self.dataset_mgr.get("sw"), (1, 0))
+    @io_update_device(CPLD, True, False, proto_rev=STA_PROTO_REV_8)
+    def test_sw_readback(self, io_update_device):
+        if "sw_device" in self.device_mgr.get_desc(DDS).get("arguments", []):
+            self.execute(AD9910Exp8, "sw_readback", io_update_device=io_update_device)
+            self.assertEqual(self.dataset_mgr.get("sw"), [1, 0])
 
     @io_update_device(CPLD, True, False, proto_rev=STA_PROTO_REV_9)
     def test_cfg_sw_readback(self, io_update_device):

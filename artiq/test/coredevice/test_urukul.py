@@ -3,6 +3,7 @@ from numpy import int32, int64
 from artiq.coredevice.core import Core
 from artiq.coredevice.urukul import (
     CPLD as UrukulCPLD,
+    ProtoRev9,
     STA_PROTO_REV_9,
     urukul_sta_rf_sw,
 )
@@ -17,7 +18,7 @@ CPLD = "urukul_cpld"
 @compile
 class UrukulExp(EnvExperiment):
     core: KernelInvariant[Core]
-    dev: KernelInvariant[UrukulCPLD]
+    dev: KernelInvariant[UrukulCPLD[ProtoRev9]]
 
     def build(self, runner):
         self.setattr_device("core")

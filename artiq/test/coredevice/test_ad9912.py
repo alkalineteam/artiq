@@ -4,6 +4,7 @@ from artiq.coredevice.ad9912 import AD9912
 from artiq.coredevice.core import Core
 from artiq.coredevice.urukul import (
     CPLD as UrukulCPLD,
+    ProtoRev9,
     STA_PROTO_REV_8,
     STA_PROTO_REV_9,
 )
@@ -19,7 +20,7 @@ DDS = "urukul_ch1"
 @compile
 class AD9912Exp(EnvExperiment):
     core: KernelInvariant[Core]
-    cpld: KernelInvariant[UrukulCPLD]
+    cpld: KernelInvariant[UrukulCPLD[ProtoRev9]]
     dev: KernelInvariant[AD9912]
     io_update_device: Kernel[bool]
 
