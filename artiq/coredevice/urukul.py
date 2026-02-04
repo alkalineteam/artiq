@@ -422,6 +422,46 @@ class ProtoRev8(CPLDVersion):
         """
         self.cfg_io_update(0, (state & 0xF) != 0)
 
+    @kernel
+    def cfg_att_en(self, channel: int32, on: bool):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_att_en not supported on ProtoRev8")
+
+    @kernel
+    def cfg_att_en_all(self, state: int32):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_att_en_all not supported on ProtoRev8")
+
+    @kernel
+    def cfg_osk(self, channel: int32, on: bool):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_osk not supported on ProtoRev8")
+
+    @kernel
+    def cfg_osk_all(self, state: int32):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_osk_all not supported on ProtoRev8")
+
+    @kernel
+    def cfg_drctl(self, channel: int32, on: bool):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_drctl not supported on ProtoRev8")
+
+    @kernel
+    def cfg_drctl_all(self, state: int32):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_drctl_all not supported on ProtoRev8")
+
+    @kernel
+    def cfg_drhold(self, channel: int32, on: bool):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_drhold not supported on ProtoRev8")
+
+    @kernel
+    def cfg_drhold_all(self, state: int32):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_drhold_all not supported on ProtoRev8")
+
 
 @compile
 class ProtoRev9(CPLDVersion):
