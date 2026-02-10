@@ -257,11 +257,10 @@
     microscope = pkgs.python3Packages.buildPythonPackage rec {
       pname = "microscope";
       version = "unstable-2020-12-28";
-      src = pkgs.fetchFromGitHub {
-        owner = "m-labs";
-        repo = "microscope";
+      src = pkgs.fetchgit {
+        url = "https://git.m-labs.hk/M-Labs/microscope.git";
         rev = "c21afe7a53258f05bde57e5ebf2e2761f3d495e4";
-        sha256 = "sha256-jzyiLRuEf7p8LdhmZvOQj/dyQx8eUE8p6uRlwoiT8vg=";
+        hash = "sha256-jzyiLRuEf7p8LdhmZvOQj/dyQx8eUE8p6uRlwoiT8vg=";
       };
       pyproject = true;
       build-system = [pkgs.python3Packages.setuptools];
