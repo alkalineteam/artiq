@@ -590,6 +590,7 @@ class PeripheralManager:
 
         pll_vco = peripheral.get("pll_vco")
         synchronization = peripheral["synchronization"]
+        pll_en = peripheral["pll_en"]
         clk_div = peripheral.get("clk_div")
         if clk_div is None:
             clk_div = 0 if pll_en else 1
