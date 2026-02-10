@@ -69,8 +69,8 @@ class SUServo:
 
     core: KernelInvariant[Core]
     pgia: KernelInvariant[SPIMaster]
-    ddses: KernelInvariant[list[AD9910[RegIOUpdate]]]
-    cplds: KernelInvariant[list[CPLD[ProtoRev9]]]
+    ddses: KernelInvariant[list[AD9910[Auto]]]
+    cplds: KernelInvariant[list[CPLD[Auto]]]
     channel: KernelInvariant[int32]
     gains: Kernel[int32]
     ref_period_mu: KernelInvariant[int64]
@@ -272,7 +272,7 @@ class Channel:
     servo: KernelInvariant[SUServo]
     channel: KernelInvariant[int32]
     servo_channel: KernelInvariant[int32]
-    dds: KernelInvariant[AD9910[RegIOUpdate]]
+    dds: KernelInvariant[AD9910[Auto]]
 
     def __init__(self, dmgr, channel, servo_device):
         self.servo = dmgr.get(servo_device)

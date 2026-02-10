@@ -11,10 +11,8 @@ from numpy import int32, int64
 from artiq.experiment import *
 from artiq.coredevice.core import Core
 from artiq.coredevice.ttl import TTLOut, TTLInOut
-from artiq.coredevice.urukul import CPLD, ProtoRev9
+from artiq.coredevice.urukul import CPLD
 from artiq.coredevice.ad9910 import AD9910, SyncDataEeprom
-
-UrukulCPLD = CPLD[ProtoRev9]
 from artiq.coredevice.mirny import Mirny
 from artiq.coredevice.almazny import AlmaznyLegacy, AlmaznyChannel
 from artiq.coredevice.adf5356 import ADF5356
@@ -287,12 +285,12 @@ class SinaraTester(EnvExperiment):
                 print("FAILED")
 
     @kernel
-    def init_urukul(self, cpld: UrukulCPLD):
+    def init_urukul(self, cpld: CPLD[Auto]):
         self.core.break_realtime()
         cpld.init()
 
     @kernel
-    def test_urukul_att(self, cpld: UrukulCPLD):
+    def test_urukul_att(self, cpld: CPLD[Auto]):
         self.core.break_realtime()
         for i in range(32):
             test_word = 1 << i

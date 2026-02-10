@@ -107,7 +107,7 @@ def urukul_sta_drover(sta: int32) -> int32:
 
 @compile
 class RegIOUpdate:
-    cpld: KernelInvariant[CPLD[ProtoRev9]]
+    cpld: KernelInvariant[CPLD[Auto]]
     chip_select: KernelInvariant[int32]
 
     def __init__(self, cpld, chip_select):

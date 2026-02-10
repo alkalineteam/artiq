@@ -153,7 +153,7 @@ class AD9910(Generic[IoUpdateT]):
     """
 
     core: KernelInvariant[Core]
-    cpld: KernelInvariant[CPLD[ProtoRev9]]
+    cpld: KernelInvariant[CPLD[Auto]]
     bus: KernelInvariant[SPIMaster]
     chip_select: KernelInvariant[int32]
     pll_en: KernelInvariant[bool]
