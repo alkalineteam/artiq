@@ -14,7 +14,7 @@ from artiq.language import import_cache
 
 
 __all__ = [
-    "Kernel", "KernelInvariant", "virtual", "ConstGeneric",
+    "Auto", "Kernel", "KernelInvariant", "virtual", "ConstGeneric",
     "round64", "floor64", "ceil64",
     "extern", "kernel", "portable", "compile",
     "rpc", "print_rpc",
@@ -25,6 +25,9 @@ __all__ = [
     "set_watchdog_factory", "watchdog", "TerminationRequested",
 ]
 
+
+class Auto:
+    pass
 
 T = TypeVar('T')
 

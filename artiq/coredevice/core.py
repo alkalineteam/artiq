@@ -162,6 +162,7 @@ nac3_builtins = {
     },
 
     "artiq": {
+        "Auto": Auto,
         "Kernel": Kernel,
         "KernelInvariant": KernelInvariant,
         "_ConstGenericMarker": _ConstGenericMarker,
