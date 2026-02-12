@@ -451,7 +451,6 @@
         packages = with pkgs;
           [
             git
-            lit
             pdf2svg
 
             python3Packages.sphinx
