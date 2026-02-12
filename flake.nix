@@ -255,6 +255,9 @@
         nativeBuildInputs = [
           (pkgs.python3.withPackages (ps: [migen misoc (artiq.withExperimentalFeatures experimentalFeatures) ps.packaging]))
           rust
+          pkgs.llvmPackages_20.clang-unwrapped
+          pkgs.llvm_20
+          pkgs.lld_20
           vivado
         ];
         overrideMain = _: {
@@ -452,6 +455,9 @@
           [
             git
             pdf2svg
+            lld_20
+            llvm_20
+            llvmPackages_20.clang-unwrapped
 
             python3Packages.sphinx
             python3Packages.sphinx-argparse
@@ -482,6 +488,9 @@
         name = "artiq-boards-shell";
         packages = [
           rust
+          pkgs.llvm_20
+          pkgs.lld_20
+          pkgs.llvmPackages_20.clang-unwrapped
 
           packages.x86_64-linux.vivado
           packages.x86_64-linux.openocd-bscanspi
