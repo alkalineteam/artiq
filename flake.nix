@@ -142,9 +142,8 @@
 
       nativeBuildInputs = [pkgs.qt6.wrapQtAppsHook];
 
-      # keep llvm_x in sync with nac3
       propagatedBuildInputs =
-        [pkgs.llvm_16 nac3.packages.x86_64-linux.nac3artiq-pgo sipyco.packages.x86_64-linux.sipyco pkgs.qt6.qtsvg artiq-comtools.packages.x86_64-linux.artiq-comtools]
+        [nac3.packages.x86_64-linux.nac3artiq-pgo sipyco.packages.x86_64-linux.sipyco pkgs.qt6.qtsvg artiq-comtools.packages.x86_64-linux.artiq-comtools]
         ++ (with pkgs.python3Packages; [pyqtgraph pygit2 numpy dateutil scipy prettytable pyserial h5py pyqt6 qasync tqdm lmdb jsonschema platformdirs]);
 
       dontWrapQtApps = true;
@@ -166,10 +165,9 @@
         "--set FONTCONFIG_FILE ${pkgs.fontconfig.out}/etc/fonts/fonts.conf"
       ];
 
-      # FIXME: automatically propagate llvm_x dependency
       # cacert is required in the check stage only, as certificates are to be
       # obtained from system elsewhere
-      nativeCheckInputs = [pkgs.llvm_16 pkgs.cacert];
+      nativeCheckInputs = [pkgs.cacert];
       checkPhase = ''
         python -m unittest discover -v artiq.test
       '';
@@ -251,9 +249,6 @@
         nativeBuildInputs = [
           (pkgs.python3.withPackages (ps: [migen misoc (artiq.withExperimentalFeatures experimentalFeatures) ps.packaging]))
           rust
-          pkgs.llvmPackages_16.clang-unwrapped
-          pkgs.llvm_16
-          pkgs.lld_16
           vivado
         ];
         overrideMain = _: {
@@ -451,9 +446,6 @@
           [
             git
             lit
-            lld_16
-            llvm_16
-            llvmPackages_16.clang-unwrapped
             pdf2svg
 
             python3Packages.sphinx
@@ -485,10 +477,6 @@
         name = "artiq-boards-shell";
         packages = [
           rust
-
-          pkgs.llvmPackages_16.clang-unwrapped
-          pkgs.llvm_16
-          pkgs.lld_16
 
           packages.x86_64-linux.vivado
           packages.x86_64-linux.openocd-bscanspi
@@ -537,7 +525,6 @@
                 ]
                 ++ ps.paramiko.optional-dependencies.ed25519
           ))
-          pkgs.llvm_16
           pkgs.openssh
           packages.x86_64-linux.openocd-bscanspi # for the bscanspi bitstreams
         ];
