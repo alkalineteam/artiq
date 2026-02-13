@@ -265,7 +265,7 @@ For easiest access run this command in the ``build`` directory. The ``szl.elf`` 
         {
             [bootloader]result/szl.elf
             gateware/top.bit
-            firmware/armv7-none-eabihf/release/<fw-type>
+            [elf_use_ph]firmware/armv7-none-eabihf/release/<fw-type>
         }
         EOF
 
