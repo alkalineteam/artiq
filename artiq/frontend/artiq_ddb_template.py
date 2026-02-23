@@ -137,6 +137,7 @@ def process_header(output, description):
 class PeripheralManager:
     def __init__(self, output, primary_description):
         self.counts = defaultdict(int)
+        self.grabber_count = count(0)
         self.output = output
         self.primary_description = primary_description
 
@@ -696,10 +697,11 @@ class PeripheralManager:
                 "type": "local",
                 "module": "artiq.coredevice.grabber",
                 "class": "Grabber",
-                "arguments": {{"channel_base": 0x{channel:06x}}}
+                "arguments": {{"channel_base": 0x{channel:06x}, "index": {index}}}
             }}""",
             name=self.get_name("grabber"),
-            channel=rtio_offset)
+            channel=rtio_offset,
+            index=next(self.grabber_count))
         return 2
 
     def process_fastino(self, rtio_offset, peripheral):
@@ -1118,6 +1120,7 @@ def process(output, primary_description, satellites):
                 target=get_cpu_target(description)),
             file=output)
         rtio_offset = destination << 16
+        pm.grabber_count = count(0)
         for peripheral in peripherals:
             n_channels = pm.process(rtio_offset, peripheral)
             rtio_offset += n_channels
