@@ -8,6 +8,7 @@ import sys
 
 from artiq.experiment import *
 from artiq.coredevice.ad9910 import AD9910, SyncDataEeprom
+from artiq.coredevice.exceptions import GrabberSerialError
 from artiq.coredevice.phaser import PHASER_GW_BASE, PHASER_GW_MIQRO
 from artiq.coredevice.shuttler import shuttler_volt_to_mu
 from artiq.coredevice.suservo import SyncDataEeprom as SUServoEeprom
@@ -883,6 +884,31 @@ class SinaraTester(EnvExperiment):
         card_dev.gate_roi(0)
         print("ROI sums:", n)
 
+    @kernel
+    def basler_write_request(self, dev, addr_len, addr, data_len, data):
+        ftf = (addr_len >> 1) - 1
+
+        dev.write_serial(0x01)
+        dev.write_serial(ftf)
+        dev.write_serial(data_len)
+        for i in range(addr_len):
+            b = (addr >> i*8) & 0xff
+            dev.write_serial(b)
+
+        for i in range(data_len):
+            b = (data >> i*8) & 0xff
+            dev.write_serial(b)
+
+        dev.write_serial(0x03)
+        ack = 0
+        while True:
+            try:
+                ack = dev.read_serial()
+                break
+            except GrabberSerialError:
+                continue
+        assert ack == 0x06, "write request failed"
+
     def test_grabbers(self):
         print("*** Testing Grabber Frame Grabbers.")
         print("Activate the camera's frame grabber output, type 'g', press "
@@ -893,8 +919,21 @@ class SinaraTester(EnvExperiment):
             return
         rois = [[0, 0, 0, 2, 2], [1, 0, 0, 2048, 2048]]
         print("ROIs:", rois)
-        for card_n, (card_name, card_dev) in enumerate(self.grabbers):
+
+        # AW00099704000, pg. 37
+        test_img_addr = 0x00030160 + 0x04
+        for card_name, card_dev in self.grabbers:
             print(card_name)
+            print("Type 'c' and ENTER to configure the camera to use a test image (Basler ace series cam).")
+            print("Just press ENTER to begin capture.")
+            if input().strip().lower() == 'c':
+                print("Writing test image setting to camera...")
+                card_dev.flush_serial()
+                self.basler_write_request(card_dev, 4, test_img_addr, 4, 1)
+                # delay to ensure setting is enabled before capture
+                now_mu = self.core.get_rtio_counter_mu()
+                self.core.wait_until_mu(now_mu + self.core.seconds_to_mu(1))
+            print("Starting capture...")
             self.grabber_capture(card_dev, rois)
 
     @kernel
