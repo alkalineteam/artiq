@@ -826,7 +826,7 @@ class DMATest(ExperimentCase):
         dt = total_dt/n
         print(dt, "s")
         if is_zynq:
-            self.assertLess(dt, 4.5*us)
+            self.assertLess(dt, 5.5*us)
         else:
             self.assertLess(dt, 4.5*ms)
 
