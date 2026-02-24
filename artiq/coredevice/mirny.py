@@ -105,6 +105,26 @@ class Mirny:
 
         :param blind: Verify presence and protocol compatibility. Raise :exc:`ValueError` on failure.
         """
+        # The CS signal on Mirny is active high.
+        # See the following commit on SPI gateware driver characteristics.
+        # https://git.m-labs.hk/M-Labs/misoc/commit/20db6c87b4a1952ee0d3a1462defa838efec5e9e
+        self.bus.set_config_mu(
+            SPI_CONFIG | spi.SPI_OFFLINE | spi.SPI_END,
+            1,              # minimum
+            SPIT_WR,
+            SPI_CS
+        )
+        self.bus.write(0)   # perform a dummy transaction offline
+
+        # Preemptively enable the SPI. Voltages of both common mode and
+        # differential are too small initially.
+        # This dummy config value is to clear the offline bit. All other
+        # values are arbitrarily selected.
+        self.bus.set_config_mu(
+            SPI_CONFIG, 1, SPIT_WR, SPI_CS
+        )
+        delay(1 * us)
+
         reg0 = self.read_reg(0)
         self.hw_rev = reg0 & 0x3
 
