@@ -669,6 +669,35 @@ fn process_aux_packet(dmamgr: &mut DmaManager, analyzer: &mut Analyzer, kernelmg
                 },
             )
         }
+        drtioaux::Packet::GrabberUartReadRequest { destination: _destination, g: _g } => {
+            forward!(router, _routing_table, _destination, *rank, *self_destination, _repeaters, &packet);
+            #[cfg(has_grabber)]
+            {
+                let packet = match board_artiq::grabber::uart::read(_g) {
+                    Ok(data) => drtioaux::Packet::GrabberUartReadReply { succeeded: true, data },
+                    Err(_) => drtioaux::Packet::GrabberUartReadReply { succeeded: false, data: 0 }
+                };
+                drtioaux::send(0, &packet)
+            }
+            #[cfg(not(has_grabber))]
+            {
+                error!("satellite does not have grabber");
+                drtioaux::send(0, &drtioaux::Packet::GrabberUartReadReply { succeeded: false, data: 0 })
+            }
+        }
+        drtioaux::Packet::GrabberUartWriteRequest { destination: _destination, g: _g, data: _data } => {
+            forward!(router, _routing_table, _destination, *rank, *self_destination, _repeaters, &packet);
+            #[cfg(has_grabber)]
+            {
+                let succeeded = board_artiq::grabber::uart::write(_g, _data).is_ok();
+                drtioaux::send(0, &drtioaux::Packet::GrabberUartWriteReply { succeeded })
+            }
+            #[cfg(not(has_grabber))]
+            {
+                error!("satellite does not have grabber");
+                drtioaux::send(0, &drtioaux::Packet::GrabberUartWriteReply { succeeded: false })
+            }
+        }
 
         _ => {
             warn!("received unexpected aux packet");
@@ -756,6 +785,11 @@ fn hardware_tick(ts: &mut u64) {
         board_artiq::grabber::tick();
         *ts = now + 200;
     }
+}
+
+fn grabber_uart_worker() {
+    #[cfg(has_grabber)]
+    board_artiq::grabber::uart::worker();
 }
 
 #[cfg(all(has_si5324, rtio_frequency = "125.0"))]
@@ -1022,6 +1056,7 @@ fn startup() {
             #[cfg(soc_platform = "efc")]
             io_expander.service().expect("I2C I/O expander service failed");
             hardware_tick(&mut hardware_tick_ts);
+            grabber_uart_worker();
         }
 
         info!("uplink is up, switching to recovered clock");
@@ -1063,6 +1098,7 @@ fn startup() {
             #[cfg(soc_platform = "efc")]
             io_expander.service().expect("I2C I/O expander service failed");
             hardware_tick(&mut hardware_tick_ts);
+            grabber_uart_worker();
             if drtiosat_tsc_loaded() {
                 info!("TSC loaded from uplink");
                 for rep in repeaters.iter() {
