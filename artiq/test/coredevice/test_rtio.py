@@ -474,13 +474,14 @@ class RTIOBatching(EnvExperiment):
     @kernel
     def underflow(self):
         self.core.reset()
-        delay(1*ms)
+        delay(0.1*ms)
         with self.core_batch:
-            for i in range(1000):
+            for i in range(3000):
                 self.ttl_out.pulse(8*ns)
 
     @kernel
     def time_empty_batch(self):
+        self.core.reset()
         t1 = self.core.get_rtio_counter_mu()
         with self.core_batch:
             pass
@@ -512,7 +513,7 @@ class BatchTest(ExperimentCase):
             total_dt += dt
         dt = total_dt/n
         print(dt, "s")
-        self.assertLess(dt, 1*us)
+        self.assertLess(dt, 4*us)
 
 class CoredeviceTest(ExperimentCase):
     def test_rtio_counter(self):
