@@ -234,6 +234,10 @@ class ADF5356:
         self.regs[13] = ADF5356_REG13_AUX_MOD_MSB_VALUE_UPDATE(self.regs[13], mod2_msb)
 
         self.regs[6] = ADF5356_REG6_RF_DIVIDER_SELECT_UPDATE(self.regs[6], rf_div_sel)
+        self.regs[6] = ADF5356_REG6_NEGATIVE_BLEED_UPDATE(
+            self.regs[6],
+            self._compute_negative_bleed_condition()
+        )
         self.regs[6] = ADF5356_REG6_CP_BLEED_CURRENT_UPDATE(
             self.regs[6], int32(floor(24 * f_pfd / (61.44 * MHz)))
         )
@@ -446,8 +450,10 @@ class ADF5356:
         # reserved values
         self.regs[6] = int32(0x14000006)
 
-        # enable negative bleed
-        self.regs[6] |= ADF5356_REG6_NEGATIVE_BLEED(1)
+        # configure negative bleed
+        self.regs[6] |= ADF5356_REG6_NEGATIVE_BLEED(
+            self._compute_negative_bleed_condition()
+        )
 
         # charge pump bleed current
         self.regs[6] |= ADF5356_REG6_CP_BLEED_CURRENT(
@@ -482,7 +488,7 @@ class ADF5356:
         # ====
 
         # reserved values
-        self.regs[8] = int32(0x102D0428)
+        self.regs[8] = int32(0x15596568)
 
         # REG9
         # ====
@@ -541,6 +547,16 @@ class ADF5356:
         while self._compute_pfd_frequency(r, d, t) > ADF5356_MAX_FREQ_PFD:
             r += 1
         return int32(r)
+    
+    @portable
+    def _compute_negative_bleed_condition(self) -> TInt32:
+        """
+        Determine if negative bleed should be enabled.
+
+        See the "Register Map, Register 6, Negative Bleed" documentation.
+        """
+        return 1 if ((self.pll_frac1() == 0) and (self.pll_frac2() == 0)
+                and (self.f_pfd() <= 100 * MHz)) else 0
 
 
 @portable
