@@ -151,7 +151,7 @@ class ADF5356:
         if n not in [0, 1, 2, 3]:
             raise ValueError("invalid power setting")
         self.regs[6] = ADF5356_REG6_RF_OUTPUT_A_POWER_UPDATE(self.regs[6], n)
-        self.sync()
+        self.write(self.regs[6])
 
     @portable
     def output_power_mu(self):
@@ -166,7 +166,7 @@ class ADF5356:
         Enable output A of the PLL chip. This is the default after init.
         """
         self.regs[6] |= ADF5356_REG6_RF_OUTPUT_A_ENABLE(1)
-        self.sync()
+        self.write(self.regs[6])
 
     @kernel
     def disable_output(self):
@@ -174,7 +174,7 @@ class ADF5356:
         Disable output A of the PLL chip.
         """
         self.regs[6] &= ~ADF5356_REG6_RF_OUTPUT_A_ENABLE(1)
-        self.sync()
+        self.write(self.regs[6])
 
     @kernel
     def set_frequency(self, f):
