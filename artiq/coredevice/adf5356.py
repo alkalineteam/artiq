@@ -242,7 +242,7 @@ class ADF5356:
             self.regs[6], int32(floor(24 * f_pfd / (61.44 * MHz)))
         )
         self.regs[9] = ADF5356_REG9_VCO_BAND_DIVISION_UPDATE(
-            self.regs[9], int32(ceil(f_pfd / 160e3))
+            self.regs[9], int32(ceil(f_pfd / 1600e3))
         )
 
         # commit
@@ -476,7 +476,7 @@ class ADF5356:
         # ====
 
         # reserved values
-        self.regs[7] = int32(0x10000007)
+        self.regs[7] = int32(0x4000007)
 
         # sync load-enable to reference
         self.regs[7] |= ADF5356_REG7_LE_SYNC(1)
@@ -500,8 +500,10 @@ class ADF5356:
             | ADF5356_REG9_TIMEOUT(0x67)
         )
 
+        f_pfd = self.f_pfd()
+
         self.regs[9] |= ADF5356_REG9_VCO_BAND_DIVISION(
-            int32(ceil(self.f_pfd() / 160e3))
+            int32(ceil(f_pfd / 1600e3))
         )
 
         # REG10
