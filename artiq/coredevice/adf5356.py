@@ -128,6 +128,14 @@ class ADF5356:
 
     @kernel
     def write(self, data):
+        """
+        Write to the input shift register.
+
+        Data transfer from the input shift register to a data register. The 4
+        LSBs are control bits, which determines the destination register.
+
+        :param data: Data to be written
+        """
         self.cpld.write_ext(self.channel | 4, 32, data)
 
     @kernel
