@@ -94,7 +94,7 @@ class SumAndScale(Module):
         else:
             # simple one-stage adder
             stage = [Signal(34)]
-            self.sync += stage[0].eq(sum(stage))
+            self.sync += stage[0].eq(sum(products))
 
         # Finally, shift and saturate
         scaled_sum = Signal((len(stage[0])-15, True))

@@ -64,7 +64,7 @@ class Songbird:
 
         :param frequency: Frequency in Hz.
         """
-        return int32(round(frequency * (2.0**32) / self.dds_freq))
+        return int(round(frequency * (2.0**32) / self.dds_freq))
 
     @kernel
     def init(self):
