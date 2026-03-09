@@ -37,6 +37,7 @@ ARTIQ-9 (Unreleased)
      higher throughput, with lower overhead than DMA recording.
    - On Zynq platforms, the overhead for switching between normal operation and DMA recording 
      context is now lower by an order of magnitude.
+   - CameraLink Grabber serial support.
 * Dashboard:
    - Experiment windows can have different colors, selected by the user.
    - The Log pane now adapts to dark system color themes.
