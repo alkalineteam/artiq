@@ -127,27 +127,6 @@
       propagatedBuildInputs = with pkgs.python3Packages; [regex];
     };
 
-    qasync = pkgs.python3Packages.buildPythonPackage rec {
-      pname = "qasync";
-      version = "0.27.1";
-      src = pkgs.fetchFromGitHub {
-        owner = "CabbageDevelopment";
-        repo = "qasync";
-        rev = "refs/tags/v${version}";
-        sha256 = "sha256-oXzwilhJ1PhodQpOZjnV9gFuoDy/zXWva9LhhK3T00g=";
-      };
-      pyproject = true;
-      build-system = [pkgs.python3Packages.setuptools];
-      postPatch = ''
-        rm qasync/_windows.py # Ignoring it is not taking effect and it will not be used on Linux
-      '';
-      buildInputs = [pkgs.python3Packages.poetry-core];
-      propagatedBuildInputs = [pkgs.python3Packages.pyqt6];
-      checkInputs = [pkgs.python3Packages.pytestCheckHook];
-      pythonImportsCheck = ["qasync"];
-      disabledTestPaths = ["tests/test_qeventloop.py"];
-    };
-
     libartiq-support = pkgs.stdenv.mkDerivation {
       name = "libartiq-support";
       src = self;
@@ -392,7 +371,7 @@
       '';
   in rec {
     packages.x86_64-linux = {
-      inherit pythonparser qasync artiq artiq-build;
+      inherit pythonparser artiq artiq-build;
       inherit migen misoc asyncserial microscope vivadoEnv vivado;
       openocd-bscanspi = openocd-bscanspi-f pkgs;
       artiq-board-kc705-nist_clock = makeArtiqBoardPackage {
