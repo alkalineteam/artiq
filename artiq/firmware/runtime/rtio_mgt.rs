@@ -148,10 +148,11 @@ pub mod drtio {
                 drtioaux::Packet::SubkernelException        { destination, .. } |
                 drtioaux::Packet::DmaPlaybackStatus         { destination, .. } |
                 drtioaux::Packet::SubkernelFinished         { destination, .. } => {
-                if *destination == 0 {
+                let hop = routing_table.0[*destination as usize][0];
+                if hop == 0 {
                     false
                 } else {
-                    let dest_link = routing_table.0[*destination as usize][0] - 1;
+                    let dest_link = hop - 1;
                     if dest_link == linkno {
                         warn!("[LINK#{}] Re-routed packet would return to the same link, dropping: {:?}", linkno, packet);
                     } else {

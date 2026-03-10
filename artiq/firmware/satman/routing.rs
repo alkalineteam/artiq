@@ -130,10 +130,7 @@ impl Router {
             let destination = packet.routable_destination();
             if let Some(destination) = destination {
                 let hop = _routing_table.0[destination as usize][_rank as usize] as usize;
-                if destination == 0 {
-                    // response is needed immediately if master required it
-                    drtioaux::send(0, &packet)?;
-                } else if !(hop > 0 && hop < csr::DRTIOREP.len()) {
+                if !(hop > 0 && hop < csr::DRTIOREP.len()) {
                     // higher rank can wait
                     self.upstream_queue.push_back(packet);
                 } else {

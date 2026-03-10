@@ -530,7 +530,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 kern_acknowledge()
             }
             &kern::DmaRecordStop { duration, enable_ddma } => {
-                let _id = session.congress.dma_manager.record_stop(duration, enable_ddma, io, ddma_mutex)?;
+                let _id = session.congress.dma_manager.record_stop(duration, enable_ddma, io, ddma_mutex, routing_table)?;
                 #[cfg(has_drtio)]
                 if enable_ddma {
                     remote_dma::upload_traces(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, _id)?;
