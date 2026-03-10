@@ -28,10 +28,11 @@ __pycache__/
 /artiq/examples/*/dataset_db.mdb-lock
 
 # when testing ad-hoc experiments at the root:
-/repository/
+# /repository/
 /results
 /last_rid.pyon
 /dataset_db.mdb
 /dataset_db.mdb-lock
-/device_db*.py
+# /device_db*.py
 /test*
+/flash/
