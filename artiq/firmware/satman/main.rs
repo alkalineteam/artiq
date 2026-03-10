@@ -775,21 +775,13 @@ fn init_rtio_crg() {
     }
 }
 
-#[cfg(not(has_rtio_crg))]
-fn init_rtio_crg() { }
-
+#[cfg(has_grabber)]
 fn hardware_tick(ts: &mut u64) {
     let now = clock::get_ms();
     if now > *ts {
-        #[cfg(has_grabber)]
         board_artiq::grabber::tick();
         *ts = now + 200;
     }
-}
-
-fn grabber_uart_worker() {
-    #[cfg(has_grabber)]
-    board_artiq::grabber::uart::worker();
 }
 
 #[cfg(all(has_si5324, rtio_frequency = "125.0"))]
@@ -1002,6 +994,7 @@ fn startup() {
         csr::eem_transceiver::txenable_write(0xffffffffu32 as _);
     }
 
+    #[cfg(has_rtio_crg)]
     init_rtio_crg();
 
     config::read_str("sed_spread_enable", |r| {
@@ -1035,6 +1028,7 @@ fn startup() {
     let mut rank = 1;
     let mut destination = 1;
 
+    #[cfg(has_grabber)]
     let mut hardware_tick_ts = 0;
 
     #[cfg(all(soc_platform = "efc", has_converter_spi))]
@@ -1055,8 +1049,11 @@ fn startup() {
             }
             #[cfg(soc_platform = "efc")]
             io_expander.service().expect("I2C I/O expander service failed");
-            hardware_tick(&mut hardware_tick_ts);
-            grabber_uart_worker();
+            #[cfg(has_grabber)]
+            {
+                hardware_tick(&mut hardware_tick_ts);
+                board_artiq::grabber::uart::worker();
+            }
         }
 
         info!("uplink is up, switching to recovered clock");
@@ -1097,8 +1094,11 @@ fn startup() {
             }
             #[cfg(soc_platform = "efc")]
             io_expander.service().expect("I2C I/O expander service failed");
-            hardware_tick(&mut hardware_tick_ts);
-            grabber_uart_worker();
+            #[cfg(has_grabber)]
+            {
+                hardware_tick(&mut hardware_tick_ts);
+                board_artiq::grabber::uart::worker();
+            }
             if drtiosat_tsc_loaded() {
                 info!("TSC loaded from uplink");
                 for rep in repeaters.iter() {
