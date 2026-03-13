@@ -77,7 +77,7 @@ def process_header(output, description):
                     "ref_period": {ref_period},
                     "analyzer_proxy": "core_analyzer",
                     "target": "{cpu_target}",
-                    "satellite_cpu_targets": {{}}
+                    "satellite_cpu_targets": {{}},
                 }},
             }},
             "core_log": {{
@@ -135,11 +135,12 @@ def process_header(output, description):
 
 
 class PeripheralManager:
-    def __init__(self, output, primary_description):
+    def __init__(self, output, primary_description, master_destination):
         self.counts = defaultdict(int)
         self.grabber_count = count(0)
         self.output = output
         self.primary_description = primary_description
+        self.master_destination = master_destination
 
     def get_name(self, ty):
         count = self.counts[ty]
@@ -260,7 +261,7 @@ class PeripheralManager:
             name=urukul_name,
             eem=peripheral["ports"][0],
             busno=busno,
-            dest="" if destination == 0 else "_{}".format(destination),
+            dest="" if destination == self.master_destination else "_{}".format(destination),
             channel=rtio_offset+next(channel))
         if synchronization:
             self.gen("""
@@ -557,7 +558,7 @@ class PeripheralManager:
                 urukul_name=name,
                 eem=eems[0],
                 busno=busno,
-                dest="" if destination == 0 else "_{}".format(destination))
+                dest="" if destination == self.master_destination else "_{}".format(destination))
 
         pll_vco = peripheral.get("pll_vco")
         synchronization = peripheral["synchronization"]
@@ -1040,7 +1041,7 @@ def split_drtio_eem(peripherals):
         list(filter(drtio_eem_filter, peripherals))
 
 
-def process(output, primary_description, satellites):
+def process(output, primary_description, satellites, master_destination):
     drtio_role = primary_description["drtio_role"]
     if drtio_role not in ("standalone", "master"):
         raise ValueError("Invalid primary node DRTIO role")
@@ -1050,12 +1051,12 @@ def process(output, primary_description, satellites):
 
     process_header(output, primary_description)
 
-    pm = PeripheralManager(output, primary_description)
+    pm = PeripheralManager(output, primary_description, master_destination)
 
     local_peripherals, drtio_peripherals = split_drtio_eem(primary_description["peripherals"])
 
     print("# {} peripherals".format(drtio_role), file=output)
-    rtio_offset = 0
+    rtio_offset = master_destination << 16
     for peripheral in local_peripherals:
         n_channels = pm.process(rtio_offset, peripheral)
         rtio_offset += n_channels
@@ -1137,6 +1138,8 @@ def get_argparser():
                         default=[], metavar=("DESTINATION", "DESCRIPTION"), type=str,
                         help="add DRTIO satellite at the given destination number with "
                              "devices from the given JSON description")
+    parser.add_argument("-m", "--master-destination", default=0, type=int,
+                        help="master destination number - must be provided if not using the default 0")
     return parser
 
 
@@ -1152,9 +1155,9 @@ def main():
 
     if args.output is not None:
         with open(args.output, "w") as f:
-            process(f, primary_description, satellites)
+            process(f, primary_description, satellites, args.master_destination)
     else:
-        process(sys.stdout, primary_description, satellites)
+        process(sys.stdout, primary_description, satellites, args.master_destination)
 
 
 if __name__ == "__main__":
