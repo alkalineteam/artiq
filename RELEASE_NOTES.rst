@@ -85,14 +85,13 @@ Breaking changes:
 * ``artiq_flash``: the syntax is different when operating on partial regions of the flash. See the example below.
   The new syntax also allows erasing partial regions. Backward compatibility is retained when erasing and 
   flashing all regions.
-* Urukul's AD9910 and AD9912 ``pll_n`` argument is now automatically calculated based on the reference clock frequency.
-  This argument in device databases is now invalid and must be removed.
-
-::
+  ::
 
   # Erase the storage flash region, flash the gateware and firmware but not bootloader and then restart the FPGA device
   artiq_flash erase=storage write=gateware,firmware start -d ./artiq_kasli/master/ --srcbuild
 
+* Urukul's AD9910 and AD9912 ``pll_n`` argument is now automatically calculated based on the reference clock frequency.
+  This argument in device databases is now invalid and must be removed.
 * Experimental features have been removed.
 * SU-Servo coefficient memory have been remapped. Users should re-interpret the record written by Channel.get_profile_mu().
 * ``device_db.py`` now requires all device DB keys to be valid Python identifiers ``[A-Za-z0-9_]``; no special characters (except underscore) are allowed.
