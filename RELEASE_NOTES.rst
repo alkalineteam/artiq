@@ -3,8 +3,8 @@
 Release notes
 =============
 
-ARTIQ-9 (Unreleased)
---------------------
+ARTIQ-9
+-------
 
 * Hardware support:
    - 12Gbps CoaXPress grabber support on Kasli-SoC with CoaXPress-SFP adapter

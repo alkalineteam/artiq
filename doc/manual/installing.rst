@@ -20,7 +20,7 @@ User environment installation
 
 There are few options for accessing ARTIQ through Nix. The easiest way is to install it into the user environment: ::
 
-  $ nix profile install git+https://git.m-labs.hk/M-Labs/artiq.git
+  $ nix profile install "git+https://git.m-labs.hk/M-Labs/artiq.git?ref=release-9"
 
 Answer "Yes" to the questions about setting Nix configuration options (for more details see :ref:`installing-details` below.) You should now have a minimal installation of ARTIQ, where the usual front-end commands (:mod:`~artiq.frontend.artiq_run`, :mod:`~artiq.frontend.artiq_master`, :mod:`~artiq.frontend.artiq_dashboard`, etc.) are all available to you.
 
@@ -34,7 +34,7 @@ Flake custom environments
 Modifying the environment and making additional packages visible to the ARTIQ commands requires using the Nix language and writing your own flake. Create an empty directory with a file ``flake.nix`` containing the following: ::
 
   {
-    inputs.extrapkg.url = "git+https://git.m-labs.hk/M-Labs/artiq-extrapkg.git";
+    inputs.extrapkg.url = "git+https://git.m-labs.hk/M-Labs/artiq-extrapkg.git?ref=release-9";
     outputs = { self, extrapkg }:
       let
         pkgs = extrapkg.pkgs;
@@ -177,13 +177,13 @@ This will set your user as a trusted user, allowing you to specify untrusted sub
 Installing via MSYS2 (Windows)
 ------------------------------
 
-We recommend using our `offline installer <https://nixbld.m-labs.hk/job/artiq/extra-beta/msys2-offline-installer/latest>`_, which contains all the necessary packages and requires no additional configuration. After installation, simply launch ``MSYS2 with ARTIQ`` from the Windows Start menu.
+We recommend using our `offline installer <https://nixbld.m-labs.hk/job/artiq/extra/msys2-offline-installer/latest>`_, which contains all the necessary packages and requires no additional configuration. After installation, simply launch ``MSYS2 with ARTIQ`` from the Windows Start menu.
 
 Alternatively, you may install `MSYS2 <https://msys2.org>`_, then edit ``C:\msys64\etc\pacman.conf`` and add at the end: ::
 
     [artiq]
     SigLevel = Optional TrustAll
-    Server = https://msys2.m-labs.hk/artiq-beta
+    Server = https://msys2.m-labs.hk/artiq
 
 Launch ``MSYS2 CLANG64`` from the Windows Start menu to open the MSYS2 shell, and enter the following commands: ::
 
@@ -212,7 +212,7 @@ Controllers for third-party devices (e.g. Thorlabs TCube, Lab Brick Digital Atte
 
 Set up the Conda channel and install ARTIQ into a new Conda environment: ::
 
-    $ conda config --prepend channels https://conda.m-labs.hk/artiq-beta
+    $ conda config --prepend channels https://conda.m-labs.hk/artiq
     $ conda config --append channels conda-forge
     $ conda create -n artiq artiq
 
