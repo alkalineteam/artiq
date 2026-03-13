@@ -3,8 +3,14 @@
 Release notes
 =============
 
-ARTIQ-9 (Unreleased)
---------------------
+ARTIQ-10 (Unreleased)
+---------------------
+
+* NAC3 compiler.
+* Multi-channel CoaXpress support.
+
+ARTIQ-9
+-------
 
 * Hardware support:
    - 12Gbps CoaXPress grabber support on Kasli-SoC with CoaXPress-SFP adapter
