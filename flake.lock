@@ -11,11 +11,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1767353405,
-        "narHash": "sha256-KGQqMMN+xavRYEPsBHnNptLvMGxaPzVqHJnYiOEo57c=",
+        "lastModified": 1773365427,
+        "narHash": "sha256-oW3vUllAIImM9KlI887gwEWK51LZQvR1lTGzpBxKxI0=",
         "ref": "refs/heads/master",
-        "rev": "3da1f80d702b3a01c4b4fba9e5bc832b79097338",
-        "revCount": 44,
+        "rev": "c318c7060ed5f1a009ee3b3907e3b38101c9c920",
+        "revCount": 47,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/artiq-comtools.git"
       },
@@ -87,11 +87,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1772822230,
-        "narHash": "sha256-yf3iYLGbGVlIthlQIk5/4/EQDZNNEmuqKZkQssMljuw=",
+        "lastModified": 1773222311,
+        "narHash": "sha256-BHoB/XpbqoZkVYZCfXJXfkR+GXFqwb/4zbWnOr2cRcU=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "71caefce12ba78d84fe618cf61644dce01cf3a96",
+        "rev": "0590cd39f728e129122770c029970378a79d076a",
         "type": "github"
       },
       "original": {
