@@ -12,11 +12,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1767353405,
-        "narHash": "sha256-KGQqMMN+xavRYEPsBHnNptLvMGxaPzVqHJnYiOEo57c=",
+        "lastModified": 1773365427,
+        "narHash": "sha256-oW3vUllAIImM9KlI887gwEWK51LZQvR1lTGzpBxKxI0=",
         "ref": "refs/heads/master",
-        "rev": "3da1f80d702b3a01c4b4fba9e5bc832b79097338",
-        "revCount": 44,
+        "rev": "c318c7060ed5f1a009ee3b3907e3b38101c9c920",
+        "revCount": 47,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/artiq-comtools.git"
       },
@@ -70,11 +70,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1773064840,
-        "narHash": "sha256-kYBQqwNM+kK2xz6rQFeIKUT2gDRMLnN74UxUYZV/0n8=",
+        "lastModified": 1773479467,
+        "narHash": "sha256-W7w+nCU7A2wgj8C7KUS070kJ65vJLLsCq9RIR1sPRdc=",
         "ref": "refs/heads/master",
-        "rev": "200d1e8be50b8dae175f30f560dde66e3efac17f",
-        "revCount": 1956,
+        "rev": "c39aca8cd5a9e088b57a86b8b337f169a8bd5d18",
+        "revCount": 1958,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/nac3.git"
       },
@@ -211,19 +211,19 @@
     "src-misoc": {
       "flake": false,
       "locked": {
-        "lastModified": 1767585989,
-        "narHash": "sha256-LA7pb4G83LGfKxB776CsQzDIyDDQrXwKnNEA25KRPVE=",
+        "lastModified": 1765867404,
+        "narHash": "sha256-YPYUHVIryXDp4W2hUtHUtBbRKIrbhInWImT0NKaacSY=",
         "ref": "refs/heads/master",
-        "rev": "98227d90be73ead8b797eca74da7c58d0c18f378",
-        "revCount": 2510,
+        "rev": "7ab412de11f6533cd68cd818924da5c28a484ccd",
+        "revCount": 2509,
         "submodules": true,
         "type": "git",
-        "url": "https://github.com/M-Labs/misoc.git"
+        "url": "https://git.m-labs.hk/M-Labs/misoc.git"
       },
       "original": {
         "submodules": true,
         "type": "git",
-        "url": "https://github.com/M-Labs/misoc.git"
+        "url": "https://git.m-labs.hk/M-Labs/misoc.git"
       }
     },
     "systems": {
