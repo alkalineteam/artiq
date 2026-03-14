@@ -155,7 +155,7 @@
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": ["dio", "dio_spi", "urukul", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "phaser_drtio", "hvamp", "shuttler", "songbird", "coaxpress_sfp"]
+                    "enum": ["dio", "dio_spi", "urukul", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "phaser_drtio", "hvamp", "shuttler", "songbird", "coaxpress_sfp"]
                 },
                 "board": {
                     "type": "string"
@@ -325,10 +325,8 @@
                             "maximum": 3
                         },
                         "pll_en": {
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": 1,
-                            "default": 1
+                            "type": "boolean",
+                            "default": true
                         },
                         "pll_vco": {
                             "type": "integer"
@@ -343,28 +341,6 @@
                             "default": "ad9910"
                         }
                     },                    
-                    "required": ["ports"]
-                }
-            }, {
-                "title": "Novogorny",
-                "if": {
-                    "properties": {
-                        "type": {
-                            "const": "novogorny"
-                        }
-                    }
-                },
-                "then": {
-                    "properties": {
-                        "ports": {
-                            "type": "array",
-                            "items": {
-                                "type": "integer"
-                            },
-                            "minItems": 1,
-                            "maxItems": 1
-                        }
-                    },
                     "required": ["ports"]
                 }
             }, {
@@ -455,10 +431,8 @@
                             "default": 32
                         },
                         "pll_en": {
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": 1,
-                            "default": 1
+                            "type": "boolean",
+                            "default": true
                         },
                         "pll_vco": {
                             "type": "integer"

@@ -1,23 +1,24 @@
 """RTIO driver for Mirny (4-channel GHz PLLs)
 """
 
-from artiq.language.core import kernel, delay, portable
+from artiq.language.core import compile, Kernel, KernelInvariant, kernel, portable
 from artiq.language.units import us
 
 from numpy import int32
 
-from artiq.coredevice import spi2 as spi
+from artiq.coredevice.core import Core
+from artiq.coredevice.spi2 import *
 
 
 SPI_CONFIG = (
-    0 * spi.SPI_OFFLINE
-    | 0 * spi.SPI_END
-    | 0 * spi.SPI_INPUT
-    | 1 * spi.SPI_CS_POLARITY
-    | 0 * spi.SPI_CLK_POLARITY
-    | 0 * spi.SPI_CLK_PHASE
-    | 0 * spi.SPI_LSB_FIRST
-    | 0 * spi.SPI_HALF_DUPLEX
+    0 * SPI_OFFLINE
+    | 0 * SPI_END
+    | 0 * SPI_INPUT
+    | 1 * SPI_CS_POLARITY
+    | 0 * SPI_CLK_POLARITY
+    | 0 * SPI_CLK_PHASE
+    | 0 * SPI_LSB_FIRST
+    | 0 * SPI_HALF_DUPLEX
 )
 
 # SPI clock write and read dividers
@@ -30,8 +31,10 @@ WE = 1 << 24
 
 # supported CPLD code version
 PROTO_REV_MATCH = 0x0
+STA_PROTO_REV_9 = 0x09
 
 
+@compile
 class Mirny:
     """
     Mirny PLL-based RF generator.
@@ -46,8 +49,12 @@ class Mirny:
         The effect depends on the hardware revision.
     :param core_device: Core device name (default: "core")
     """
-
-    kernel_invariants = {"bus", "core", "refclk", "clk_sel_hw_rev"}
+    core: KernelInvariant[Core]
+    bus: KernelInvariant[SPIMaster]
+    refclk: KernelInvariant[float]
+    clk_sel_hw_rev: Kernel[list[int32]]
+    hw_rev: Kernel[int32]
+    clk_sel: Kernel[int32]
 
     def __init__(self, dmgr, spi_device, refclk=100e6, clk_sel="XO", core_device="core"):
         self.core = dmgr.get(core_device)
@@ -81,22 +88,22 @@ class Mirny:
         # TODO: support clk_div on v1.0 boards
 
     @kernel
-    def read_reg(self, addr):
+    def read_reg(self, addr: int32) -> int32:
         """Read a register."""
         self.bus.set_config_mu(
-            SPI_CONFIG | spi.SPI_INPUT | spi.SPI_END, 24, SPIT_RD, SPI_CS
+            SPI_CONFIG | SPI_INPUT | SPI_END, 24, SPIT_RD, SPI_CS
         )
         self.bus.write((addr << 25))
-        return self.bus.read() & int32(0xFFFF)
+        return self.bus.read() & 0xFFFF
 
     @kernel
-    def write_reg(self, addr, data):
+    def write_reg(self, addr: int32, data: int32):
         """Write a register."""
-        self.bus.set_config_mu(SPI_CONFIG | spi.SPI_END, 24, SPIT_WR, SPI_CS)
+        self.bus.set_config_mu(SPI_CONFIG | SPI_END, 24, SPIT_WR, SPI_CS)
         self.bus.write((addr << 25) | WE | ((data & 0xFFFF) << 8))
 
     @kernel
-    def init(self, blind=False):
+    def init(self, blind: bool = False):
         """
         Initialize and detect Mirny.
 
@@ -109,7 +116,7 @@ class Mirny:
         # See the following commit on SPI gateware driver characteristics.
         # https://git.m-labs.hk/M-Labs/misoc/commit/20db6c87b4a1952ee0d3a1462defa838efec5e9e
         self.bus.set_config_mu(
-            SPI_CONFIG | spi.SPI_OFFLINE | spi.SPI_END,
+            SPI_CONFIG | SPI_OFFLINE | SPI_END,
             1,              # minimum
             SPIT_WR,
             SPI_CS
@@ -123,7 +130,7 @@ class Mirny:
         self.bus.set_config_mu(
             SPI_CONFIG, 1, SPIT_WR, SPI_CS
         )
-        delay(1 * us)
+        self.core.delay(1. * us)
 
         reg0 = self.read_reg(0)
         self.hw_rev = reg0 & 0x3
@@ -131,7 +138,7 @@ class Mirny:
         if not blind:
             if (reg0 >> 2) & 0x3 != PROTO_REV_MATCH:
                 raise ValueError("Mirny PROTO_REV mismatch")
-            delay(100 * us)  # slack
+            self.core.delay(100. * us)  # slack
 
         # select clock source
         self.clk_sel = self.clk_sel_hw_rev[self.hw_rev]
@@ -140,31 +147,31 @@ class Mirny:
             raise ValueError("Hardware revision not supported")
 
         self.write_reg(1, (self.clk_sel << 4))
-        delay(1000 * us)
+        self.core.delay(1000. * us)
 
-    @portable(flags={"fast-math"})
-    def att_to_mu(self, att):
+    @portable
+    def att_to_mu(self, att: float) -> int32:
         """Convert an attenuation setting in dB to machine units.
 
         :param att: Attenuation setting in dB.
         :return: Digital attenuation setting.
         """
-        code = int32(255) - int32(round(att * 8))
+        code = int32(255) - int32(round(att * 8.))
         if code < 0 or code > 255:
             raise ValueError("Invalid Mirny attenuation!")
         return code
 
     @kernel
-    def set_att_mu(self, channel, att):
+    def set_att_mu(self, channel: int32, att: int32):
         """Set digital step attenuator in machine units.
 
         :param att: Attenuation setting, 8-bit digital.
         """
-        self.bus.set_config_mu(SPI_CONFIG | spi.SPI_END, 16, SPIT_WR, SPI_CS)
+        self.bus.set_config_mu(SPI_CONFIG | SPI_END, 16, SPIT_WR, SPI_CS)
         self.bus.write(((channel | 8) << 25) | (att << 16))
 
     @kernel
-    def set_att(self, channel, att):
+    def set_att(self, channel: int32, att: float):
         """Set digital step attenuator in SI units.
 
         This method will write the attenuator settings of the selected channel.
@@ -179,11 +186,11 @@ class Mirny:
         self.set_att_mu(channel, self.att_to_mu(att))
 
     @kernel
-    def write_ext(self, addr, length, data, ext_div=SPIT_WR):
+    def write_ext(self, addr: int32, length: int32, data: int32, ext_div: int32 = SPIT_WR):
         """Perform SPI write to a prefixed address."""
         self.bus.set_config_mu(SPI_CONFIG, 8, SPIT_WR, SPI_CS)
         self.bus.write(addr << 25)
-        self.bus.set_config_mu(SPI_CONFIG | spi.SPI_END, length, ext_div, SPI_CS)
+        self.bus.set_config_mu(SPI_CONFIG | SPI_END, length, ext_div, SPI_CS)
         if length < 32:
             data <<= 32 - length
         self.bus.write(data)

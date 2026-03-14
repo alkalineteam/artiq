@@ -2,239 +2,170 @@
 Core ARTIQ extensions to the Python language.
 """
 
-from collections import namedtuple
+from typing import Generic, TypeVar
 from functools import wraps
-import numpy
+from inspect import getfullargspec, getmodule
+from types import SimpleNamespace
+from math import floor, ceil
+
+from numpy import int32, int64
+
+from artiq.language import import_cache
 
 
-__all__ = ["kernel", "portable", "rpc", "subkernel", "syscall", "host_only",
-           "kernel_from_string", "set_time_manager", "set_watchdog_factory",
-           "TerminationRequested"]
+__all__ = [
+    "Auto", "Kernel", "KernelInvariant", "virtual", "ConstGeneric",
+    "round64", "floor64", "ceil64",
+    "extern", "kernel", "portable", "compile",
+    "rpc", "print_rpc",
+    "Option", "Some", "none", "UnwrapNoneError",
+    "set_time_manager",
+    "parallel", "legacy_parallel", "sequential",
+    "delay_mu", "now_mu", "at_mu",
+    "set_watchdog_factory", "watchdog", "TerminationRequested",
+]
 
-# global namespace for kernels
-kernel_globals = (
-    "sequential", "parallel", "interleave",
-    "delay_mu", "now_mu", "at_mu", "delay",
-    "watchdog"
-)
-__all__.extend(kernel_globals)
+
+class Auto:
+    pass
+
+T = TypeVar('T')
+
+class Kernel(Generic[T]):
+    pass
+
+class KernelInvariant(Generic[T]):
+    pass
+
+class virtual(Generic[T]):
+    pass
+
+class _ConstGenericMarker:
+    pass
+
+def ConstGeneric(name, constraint):
+    return TypeVar(name, _ConstGenericMarker, constraint)
+
+def round64(x):
+    return int64(round(x))
+
+def floor64(x):
+    return int64(floor(x))
+
+def ceil64(x):
+    return int64(ceil(x))
 
 
-_ARTIQEmbeddedInfo = namedtuple("_ARTIQEmbeddedInfo",
-                                "core_name portable function syscall forbidden destination flags")
+# Delay NAC3 analysis until all referenced variables are supposed to exist on the CPython side.
+_registered_functions = dict()
+_registered_classes = dict()
 
-def kernel(arg=None, flags={}):
-    """
-    This decorator marks an object's method for execution on the core
-    device.
+def _register_function(fun):
+    module = getmodule(fun)
+    import_cache.add_module_to_cache(module)
+    _registered_functions[fun] = module
 
-    When a decorated method is called from the Python interpreter, the ``core``
-    attribute of the object is retrieved and used as core device driver. The
-    core device driver will typically compile, transfer and run the method
-    (kernel) on the device.
+def _register_class(cls):
+    module = getmodule(cls)
+    import_cache.add_module_to_cache(module)
+    _registered_classes[cls] = module
 
-    When kernels call another method:
 
-        - if the method is a kernel for the same core device, it is compiled
-          and sent in the same binary. Calls between kernels happen entirely on
-          the device.
-        - if the method is a regular Python method (not a kernel), it generates
-          a remote procedure call (RPC) for execution on the host.
+def extern(function):
+    """Decorates a function declaration defined by the core device runtime."""
+    _register_function(function)
+    return function
 
-    The decorator takes an optional parameter that defaults to ``core`` and
-    specifies the name of the attribute to use as core device driver.
 
-    This decorator must be present in the global namespace of all modules using
-    it for the import cache to work properly.
-    """
-    if isinstance(arg, str):
-        def inner_decorator(function):
-            @wraps(function)
-            def run_on_core(self, *k_args, **k_kwargs):
-                return getattr(self, arg).run(run_on_core, ((self,) + k_args), k_kwargs)
-            run_on_core.artiq_embedded = _ARTIQEmbeddedInfo(
-                core_name=arg, portable=False, function=function, syscall=None,
-                forbidden=False, destination=None, flags=set(flags))
-            return run_on_core
-        return inner_decorator
-    elif arg is None:
-        def inner_decorator(function):
-            return kernel(function, flags)
-        return inner_decorator
+def kernel(function_or_method):
+    """Decorates a function or method to be executed on the core device."""
+    if isinstance(function_or_method, staticmethod):
+        function_or_method = function_or_method.__func__
+    _register_function(function_or_method)
+    argspec = getfullargspec(function_or_method)
+    if argspec.args and argspec.args[0] == "self":
+        @wraps(function_or_method)
+        def run_on_core(self, *args, **kwargs):
+            fake_method = SimpleNamespace(__self__=self, __name__=function_or_method.__name__)
+            return self.core.run(fake_method, args, kwargs)
     else:
-        return kernel("core", flags)(arg)
+        @wraps(function_or_method)
+        def run_on_core(*args, **kwargs):
+            raise RuntimeError("Kernel functions need explicit core.run()")
+    run_on_core.__artiq_kernel__ = True
+    return run_on_core
 
-def subkernel(arg=None, destination=0, flags={}):
+
+def portable(function):
+    """Decorates a function or method to be executed on the same device (host/core device) as the caller."""
+    _register_function(function)
+    return function
+
+
+def compile(cls):
     """
-    This decorator marks an object's method or function for execution on a satellite device.
-    Destination must be given, and it must be between 1 and 255 (inclusive).
-
-    Subkernels behave similarly to kernels, with few key differences:
-
-        - they are started from main kernels,
-        - they do not support RPCs,
-        - but they can call other kernels or subkernels.
-
-    Subkernels can accept arguments and return values. However, they must be fully 
-    annotated with ARTIQ types.
-
-    To call a subkernel, call it like a normal function. 
-    
-    To await its finishing execution, call ``subkernel_await(subkernel, [timeout])``.
-    The timeout parameter is optional, and by default is equal to 10000 (miliseconds).
-    This time can be adjusted for subkernels that take a long time to execute.
-
-    The compiled subkernel is copied to satellites, but not yet to the kernel core
-    until it's called. For bigger subkernels it may take some time before they
-    actually start running. To help with that, subkernels can be preloaded, with
-    ``subkernel_preload(subkernel)`` function. A call to a preloaded subkernel 
-    will take less time, but only one subkernel can be preloaded at a time.
+    Registers a class to be compiled by ARTIQ.
+    All classes containing kernels or portable methods must use this decorator.
     """
-    if isinstance(arg, str):
-        def inner_decorator(function):
-            @wraps(function)
-            def run_subkernel(self, *k_args, **k_kwargs):
-                sid = getattr(self, arg).prepare_subkernel(destination, run_subkernel, ((self,) + k_args), k_kwargs)
-                getattr(self, arg).run_subkernel(sid)
-            run_subkernel.artiq_embedded = _ARTIQEmbeddedInfo(
-                core_name=arg, portable=False, function=function, syscall=None,
-                forbidden=False, destination=destination, flags=set(flags))
-            return run_subkernel
-        return inner_decorator
-    elif arg is None:
-        def inner_decorator(function):
-            return subkernel(function, destination, flags)
-        return inner_decorator
-    else:
-        return subkernel("core", destination, flags)(arg)
+    _register_class(cls)
+    return cls
 
-def portable(arg=None, flags={}):
-    """
-    This decorator marks a function for execution on the same device as its
-    caller.
-
-    In other words, a decorated function called from the interpreter on the
-    host will be executed on the host (no compilation and execution on the
-    core device). A decorated function called from a kernel will be executed
-    on the core device (no RPC).
-
-    This decorator must be present in the global namespace of all modules using
-    it for the import cache to work properly.
-    """
-    if arg is None:
-        def inner_decorator(function):
-            return portable(function, flags)
-        return inner_decorator
-    else:
-        arg.artiq_embedded = \
-            _ARTIQEmbeddedInfo(core_name=None, portable=True, function=arg, syscall=None,
-                               forbidden=False, destination=None, flags=set(flags))
-        return arg
 
 def rpc(arg=None, flags={}):
     """
     This decorator marks a function for execution on the host interpreter.
-    This is also the default behavior of ARTIQ; however, this decorator allows for
-    specifying additional flags.
     """
     if arg is None:
         def inner_decorator(function):
             return rpc(function, flags)
         return inner_decorator
-    else:
-        arg.artiq_embedded = \
-            _ARTIQEmbeddedInfo(core_name=None, portable=False, function=arg, syscall=None,
-                               forbidden=False, destination=None, flags=set(flags))
-        return arg
-
-def syscall(arg=None, flags={}):
-    """
-    This decorator marks a function as a system call. When executed on a core
-    device, a C function with the provided name (or the same name as
-    the Python function, if not provided) will be called. When executed on
-    host, the Python function will be called as usual.
-
-    Every argument and the return value must be annotated with ARTIQ types.
-
-    Only drivers should normally define syscalls.
-    """
-    if isinstance(arg, str):
-        def inner_decorator(function):
-            function.artiq_embedded = \
-                _ARTIQEmbeddedInfo(core_name=None, portable=False, function=None,
-                                   syscall=arg, forbidden=False, destination=None,
-                                   flags=set(flags))
-            return function
-        return inner_decorator
-    elif arg is None:
-        def inner_decorator(function):
-            return syscall(function.__name__, flags)(function)
-        return inner_decorator
-    else:
-        return syscall(arg.__name__)(arg)
-
-def host_only(function):
-    """
-    This decorator marks a function so that it can only be executed
-    in the host Python interpreter.
-    """
-    function.artiq_embedded = \
-        _ARTIQEmbeddedInfo(core_name=None, portable=False, function=None, syscall=None,
-                           forbidden=True, destination=None, flags={})
-    return function
+    _register_function(arg)
+    return arg
 
 
-def kernel_from_string(parameters, body_code, decorator=kernel):
-    """Build a kernel function from the supplied source code in string form,
-    similar to ``exec()``/``eval()``.
+@rpc(flags={"async"})
+def print_rpc(a: T):
+    print(a)
 
-    Operating on pieces of source code as strings is a very brittle form of
-    metaprogramming; kernels generated like this are hard to debug, and
-    inconvenient to write. Nevertheless, this can sometimes be useful to work
-    around restrictions in ARTIQ Python. In that instance, care should be taken
-    to keep string-generated code to a minimum and cleanly separate it from
-    surrounding code.
 
-    The resulting function declaration is also evaluated using ``exec()`` for
-    use from host Python code. To encourage a modicum of code hygiene, no
-    global symbols are available by default; any objects accessed by the
-    function body must be passed in explicitly as parameters.
+@compile
+class UnwrapNoneError(Exception):
+    """Raised when unwrapping a none Option."""
+    artiq_builtin = True
 
-    :param parameters: A list of parameter names the generated functions
-        accepts. Each entry can either be a string or a tuple of two strings;
-        if the latter, the second element specifies the type annotation.
-    :param body_code: The code for the function body, in string form.
-        ``return`` statements can be used to return values, as usual.
-    :param decorator: One of ``kernel`` or ``portable`` (optionally with
-        parameters) to specify how the function will be executed.
+class Option(Generic[T]):
+    _nac3_option: T
 
-    :return: The function generated from the arguments.
-    """
+    def __init__(self, v: T):
+        self._nac3_option = v
 
-    # Build complete function declaration.
-    decl = "def kernel_from_string_fn("
-    for p in parameters:
-        type_annotation = ""
-        if isinstance(p, tuple):
-            name, typ = p
-            type_annotation = ": " + typ
+    def is_none(self):
+        return self._nac3_option is None
+
+    def is_some(self):
+        return self._nac3_option is not None
+
+    def unwrap(self):
+        if self.is_none():
+            raise UnwrapNoneError
+        return self._nac3_option
+
+    def __repr__(self) -> str:
+        if self.is_none():
+            return "none"
         else:
-            name = p
-        decl += name + type_annotation + ","
-    decl += "):\n"
-    decl += "\n".join("    " + line for line in body_code.split("\n"))
+            return "Some({})".format(repr(self._nac3_option))
 
-    # Evaluate to get host-side function declaration.
-    context = {}
-    try:
-        exec(decl, context)
-    except SyntaxError:
-        raise SyntaxError("Error parsing kernel function: '{}'".format(decl))
-    fn = decorator(context["kernel_from_string_fn"])
+    def __str__(self) -> str:
+        if self.is_none():
+            return "none"
+        else:
+            return "Some({})".format(str(self._nac3_option))
 
-    # Save source code for the compiler to pick up later.
-    fn.artiq_embedded = fn.artiq_embedded._replace(function=decl)
-    return fn
+def Some(v: T) -> Option[T]:
+    return Option(v)
+
+none = Option(None)
 
 
 class _DummyTimeManager:
@@ -252,7 +183,6 @@ class _DummyTimeManager:
 
 _time_manager = _DummyTimeManager()
 
-
 def set_time_manager(time_manager):
     """Set the time manager used for simulating kernels by running them
     directly inside the Python interpreter. The time manager responds to the
@@ -263,32 +193,48 @@ def set_time_manager(time_manager):
     _time_manager = time_manager
 
 
-class _Sequential:
-    """In a sequential block, statements are executed one after another, with
-    the time increasing as one moves down the statement list."""
-    def __enter__(self):
-        _time_manager.enter_sequential()
-
-    def __exit__(self, type, value, traceback):
-        _time_manager.exit()
-sequential = _Sequential()
-
-
-class _Parallel:
-    """In a parallel block, all top-level statements start their execution at
+@compile
+class _ParallelContextManager:
+    """In a parallel block, all statements start their execution at
     the same time.
-
     The execution time of a parallel block is the execution time of its longest
     statement. A parallel block may contain sequential blocks, which themselves
     may contain parallel blocks, etc.
     """
+    # Those methods are not actual RPCs, but they need to be registered with
+    # NAC3 for the context manager to typecheck.
+    # In the codegen phase, NAC3ARTIQ detects those special context managers
+    # and takes over, without generating the RPC calling code.
+    @rpc
     def __enter__(self):
         _time_manager.enter_parallel()
 
-    def __exit__(self, type, value, traceback):
+    @rpc
+    def __exit__(self, *exc_info):
         _time_manager.exit()
-parallel = _Parallel()
-interleave = _Parallel() # no difference in semantics on host
+
+@compile
+class _SequentialContextManager:
+    """In a sequential block, statements are executed one after another, with
+    the time increasing as one moves down the statement list."""
+    @rpc
+    def __enter__(self):
+        _time_manager.enter_sequential()
+
+    @rpc
+    def __exit__(self, *exc_info):
+        _time_manager.exit()
+
+parallel = _ParallelContextManager()
+legacy_parallel = _ParallelContextManager()
+sequential = _SequentialContextManager()
+
+_special_ids = {
+    "parallel": id(parallel),
+    "legacy_parallel": id(legacy_parallel),
+    "sequential": id(sequential),
+}
+
 
 def delay_mu(duration):
     """Increases the RTIO time by the given amount (in machine units)."""
@@ -297,7 +243,6 @@ def delay_mu(duration):
 
 def now_mu():
     """Retrieve the current RTIO timeline cursor, in machine units.
-
     Note the conceptual difference between this and the current value of the
     hardware RTIO counter; see e.g.
     :meth:`artiq.coredevice.core.Core.get_rtio_counter_mu` for the latter.
@@ -308,11 +253,6 @@ def now_mu():
 def at_mu(time):
     """Sets the RTIO time to the specified absolute value, in machine units."""
     _time_manager.set_time_mu(time)
-
-
-def delay(duration):
-    """Increases the RTIO time by the given amount (in seconds)."""
-    _time_manager.take_time(duration)
 
 
 class _DummyWatchdog:

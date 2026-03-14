@@ -1,16 +1,26 @@
-from abc import abstractmethod
+from __future__ import annotations
 
+from typing import Generic, TypeVar
 from numpy import int32, int64
 
-from artiq.coredevice import spi2 as spi
-from artiq.language.core import at_mu, delay, delay_mu, kernel, now_mu, portable
-from artiq.language.types import TBool, TFloat, TInt32, TInt64
-from artiq.language.units import ms, us
+from artiq.language.core import *
+from artiq.language.units import us, ms
 
-SPI_CONFIG = (0 * spi.SPI_OFFLINE | 0 * spi.SPI_END |
-              0 * spi.SPI_INPUT | 1 * spi.SPI_CS_POLARITY |
-              0 * spi.SPI_CLK_POLARITY | 0 * spi.SPI_CLK_PHASE |
-              0 * spi.SPI_LSB_FIRST | 0 * spi.SPI_HALF_DUPLEX)
+from artiq.coredevice.core import Core
+from artiq.coredevice.spi2 import *
+from artiq.coredevice.ttl import TTLOut, TTLClockGen
+
+
+SPI_CONFIG = (
+    0 * SPI_OFFLINE
+    | 0 * SPI_END
+    | 0 * SPI_INPUT
+    | 1 * SPI_CS_POLARITY
+    | 0 * SPI_CLK_POLARITY
+    | 0 * SPI_CLK_PHASE
+    | 0 * SPI_LSB_FIRST
+    | 0 * SPI_HALF_DUPLEX
+)
 
 # SPI clock write and read dividers
 SPIT_CFG_WR = 2
@@ -21,12 +31,20 @@ SPIT_ATT_RD = 16
 SPIT_DDS_WR = 2
 SPIT_DDS_RD = 16
 
-# Common CFG configuration register bit offsets
+# CFG configuration register bit offsets
 CFG_RF_SW = 0
 CFG_LED = 4
 CFG_PROFILE = 8
+CFG_IO_UPDATE = 12
+CFG_MASK_NU = 13
+CFG_CLK_SEL0 = 17
+CFG_CLK_SEL1 = 21
+CFG_SYNC_SEL = 18
+CFG_RST = 19
+CFG_IO_RST = 20
+CFG_CLK_DIV = 22
 
-# Common STA status register bit offsets
+# STA status register bit offsets
 STA_RF_SW = 0
 STA_SMP_ERR = 4
 STA_PLL_LOCK = 8
@@ -34,11 +52,11 @@ STA_IFC_MODE = 12
 STA_PROTO_REV = 16
 STA_DROVER = 23
 
-# Supported hardware and CPLD code version
-STA_PROTO_REV_8 = 0x08
+# supported hardware and CPLD code version
+STA_PROTO_REV_8 = 0x08  # See NAC3TODO below for more details
 STA_PROTO_REV_9 = 0x09
 
-# Chip select (decoded)
+# chip select (decoded)
 CS_CFG = 1
 CS_ATT = 2
 CS_DDS_MULTI = 3
@@ -52,48 +70,52 @@ DEFAULT_PROFILE = 7
 
 
 @portable
-def urukul_sta_rf_sw(sta):
+def urukul_sta_rf_sw(sta: int32) -> int32:
     """Return the RF switch status from Urukul status register value."""
     return (sta >> STA_RF_SW) & 0xF
 
 
 @portable
-def urukul_sta_smp_err(sta):
+def urukul_sta_smp_err(sta: int32) -> int32:
     """Return the SMP_ERR status from Urukul status register value."""
     return (sta >> STA_SMP_ERR) & 0xF
 
 
 @portable
-def urukul_sta_pll_lock(sta):
+def urukul_sta_pll_lock(sta: int32) -> int32:
     """Return the PLL_LOCK status from Urukul status register value."""
     return (sta >> STA_PLL_LOCK) & 0xF
 
 
 @portable
-def urukul_sta_ifc_mode(sta):
+def urukul_sta_ifc_mode(sta: int32) -> int32:
     """Return the IFC_MODE status from Urukul status register value."""
     return (sta >> STA_IFC_MODE) & 0xF
 
 
 @portable
-def urukul_sta_proto_rev(sta):
+def urukul_sta_proto_rev(sta: int32) -> int32:
     """Return the PROTO_REV value from Urukul status register value."""
     return (sta >> STA_PROTO_REV) & 0x7F
 
 
 @portable
-def urukul_sta_drover(sta):
+def urukul_sta_drover(sta: int32) -> int32:
     """Return the DROVER status from Urukul status register value."""
     return (sta >> STA_DROVER) & 0xF
 
 
+@compile
 class RegIOUpdate:
+    cpld: KernelInvariant[CPLD[Auto]]
+    chip_select: KernelInvariant[int32]
+
     def __init__(self, cpld, chip_select):
         self.cpld = cpld
         self.chip_select = chip_select
 
     @kernel
-    def pulse_mu(self, duration):
+    def pulse_mu(self, duration: int64):
         """Pulse the output high for the specified duration
         (in machine units).
 
@@ -107,7 +129,7 @@ class RegIOUpdate:
         self.cpld.cfg_write(cfg)
 
     @kernel
-    def pulse(self, duration):
+    def pulse(self, duration: float):
         """Pulse the output high for the specified duration
         (in seconds).
 
@@ -117,149 +139,146 @@ class RegIOUpdate:
             self.cpld.cfg_io_update_all(0xF)
         else:
             self.cpld.cfg_io_update(self.chip_select & 0x3, True)
-        delay(duration)
+        self.cpld.core.delay(duration)
         self.cpld.cfg_write(cfg)
 
 
+@compile
 class _DummySync:
     def __init__(self, cpld):
         self.cpld = cpld
 
     @kernel
-    def set_mu(self, ftw: TInt32):
+    def set_mu(self, ftw: int32):
         pass
 
 
+@compile
 class CPLDVersion:
     """
-    Abstract base class for methods requiring version-specific CPLD implementations.
+    Base class for methods requiring version-specific CPLD implementations.
 
-    Defines interface methods that must be customized for different CPLD versions.
+    Defines abstract interface methods that must be customized for different CPLD versions.
     """
     def __init__(self, cpld):
         self.cpld = cpld
 
-    @abstractmethod
     @kernel
-    def cfg_write(self, cfg):
+    def cfg_write(self, cfg: int64):
         pass
 
-    @abstractmethod
     @kernel
-    def sta_read(self):
+    def sta_read(self) -> int32:
+        return 0
+
+    @kernel
+    def init(self, blind: bool):
         pass
 
-    @abstractmethod
-    @kernel
-    def init(self, blind):
-        pass
-
-    @abstractmethod
     @kernel
     def io_rst(self):
         pass
 
-    @abstractmethod
     @kernel
-    def set_profile(self, channel: TInt32, profile: TInt32):
+    def set_profile(self, channel: int32, profile: int32):
         pass
 
     @kernel
-    def _configure_bit(self, bit_offset: TInt32, channel: TInt32, on: TBool):
+    def _configure_bit(self, bit_offset: int32, channel: int32, on: bool):
         pass
 
     @kernel
-    def _configure_all_bits(self, bit_offset: TInt32, state: TInt32):
+    def _configure_all_bits(self, bit_offset: int32, state: int32):
         pass
 
     @kernel
-    def cfg_mask_nu(self, channel: TInt32, on: TBool):
+    def cfg_mask_nu(self, channel: int32, on: bool):
         pass
 
     @kernel
-    def cfg_mask_nu_all(self, state: TInt32):
+    def cfg_mask_nu_all(self, state: int32):
         pass
 
-    def _not_implemented(self, *args, **kwargs):
+    @kernel
+    def _not_implemented(self):
         raise NotImplementedError(
             "This function is not implemented for this Urukul version."
         )
 
     @kernel
-    def cfg_att_en(self, channel: TInt32, on: TBool):
+    def cfg_att_en(self, channel: int32, on: bool):
         self._not_implemented()
 
     @kernel
-    def cfg_att_en_all(self, state: TInt32):
+    def cfg_att_en_all(self, state: int32):
         self._not_implemented()
 
     @kernel
-    def cfg_osk(self, channel: TInt32, on: TBool):
+    def cfg_osk(self, channel: int32, on: bool):
         self._not_implemented()
 
     @kernel
-    def cfg_osk_all(self, state: TInt32):
+    def cfg_osk_all(self, state: int32):
         self._not_implemented()
 
     @kernel
-    def cfg_drctl(self, channel: TInt32, on: TBool):
+    def cfg_drctl(self, channel: int32, on: bool):
         self._not_implemented()
 
     @kernel
-    def cfg_drctl_all(self, state: TInt32):
+    def cfg_drctl_all(self, state: int32):
         self._not_implemented()
 
     @kernel
-    def cfg_drhold(self, channel: TInt32, on: TBool):
+    def cfg_drhold(self, channel: int32, on: bool):
         self._not_implemented()
 
     @kernel
-    def cfg_drhold_all(self, state: TInt32):
+    def cfg_drhold_all(self, state: int32):
         self._not_implemented()
 
     @kernel
-    def cfg_io_update(self, channel: TInt32, on: TBool):
+    def cfg_io_update(self, channel: int32, on: bool):
         self._not_implemented()
 
     @kernel
-    def cfg_io_update_all(self, state: TInt32):
+    def cfg_io_update_all(self, state: int32):
         self._not_implemented()
 
 
+@compile
 class ProtoRev8(CPLDVersion):
     """
     Implementation of the CPLD for Urukul ProtoRev8.
     """
 
-    def __init__(self, cpld):
-        super().__init__(cpld)
-
+    cpld: KernelInvariant[CPLD[ProtoRev8]]
     # ProtoRev8 CFG configuration register bit offsets
-    CFG_IO_UPDATE = 12
-    CFG_MASK_NU = 13
-    CFG_CLK_SEL0 = 17
-    CFG_CLK_SEL1 = 21
-    CFG_SYNC_SEL = 18
-    CFG_RST = 19
-    CFG_IO_RST = 20
-    CFG_CLK_DIV = 22
+    CFG_IO_UPDATE: Kernel[int32] = 12
+    CFG_MASK_NU: Kernel[int32] = 13
+    CFG_CLK_SEL0: Kernel[int32] = 17
+    CFG_CLK_SEL1: Kernel[int32] = 21
+    CFG_SYNC_SEL: Kernel[int32] = 18
+    CFG_RST: Kernel[int32] = 19
+    CFG_IO_RST: Kernel[int32] = 20
+    CFG_CLK_DIV: Kernel[int32] = 22
 
-    @staticmethod
     @portable
     def urukul_cfg(
-        rf_sw,
-        led,
-        profile,
-        io_update,
-        mask_nu,
-        clk_sel,
-        sync_sel,
-        rst,
-        io_rst,
-        clk_div,
-    ):
+        self,
+        rf_sw: int32,
+        led: int32,
+        profile: int32,
+        io_update: int32,
+        mask_nu: int32,
+        clk_sel: int32,
+        sync_sel: int32,
+        rst: int32,
+        io_rst: int32,
+        clk_div: int32,
+    ) -> int64:
         """Build Urukul CPLD configuration register"""
-        return (
+        return int64(
             (rf_sw << CFG_RF_SW)
             | (led << CFG_LED)
             | (profile << CFG_PROFILE)
@@ -274,128 +293,119 @@ class ProtoRev8(CPLDVersion):
         )
 
     @kernel
-    def cfg_write(self, cfg: TInt64):
+    def cfg_write(self, cfg: int64):
         """Write to the configuration register.
-
         See :func:`urukul_cfg` for possible flags.
-
         :param cfg: 24-bit data to be written. Will be stored at
             :attr:`cfg_reg`.
         """
-        self.cpld.bus.set_config_mu(SPI_CONFIG | spi.SPI_END, 24, SPIT_CFG_WR, CS_CFG)
+        self.cpld.bus.set_config_mu(SPI_CONFIG | SPI_END, 24, SPIT_CFG_WR, CS_CFG)
         self.cpld.bus.write(int32(cfg) << 8)
         self.cpld.cfg_reg = int64(cfg)
 
     @kernel
-    def sta_read(self) -> TInt32:
+    def sta_read(self) -> int32:
         """Read the status register.
-
         Use any of the following functions to extract values:
-
             * :func:`urukul_sta_rf_sw`
             * :func:`urukul_sta_smp_err`
             * :func:`urukul_sta_pll_lock`
             * :func:`urukul_sta_ifc_mode`
             * :func:`urukul_sta_proto_rev`
-
         :return: The status register value.
         """
         self.cpld.bus.set_config_mu(
-            SPI_CONFIG | spi.SPI_END | spi.SPI_INPUT, 24, SPIT_CFG_RD, CS_CFG
+            SPI_CONFIG | SPI_END | SPI_INPUT, 24, SPIT_CFG_RD, CS_CFG
         )
-        self.cpld.bus.write(self.cpld.cfg_reg << 8)
+        self.cpld.bus.write(int32(self.cpld.cfg_reg << 8))
         return self.cpld.bus.read()
 
     @kernel
-    def init(self, blind):
+    def init(self, blind: bool):
         """Initialize Urukul with ProtoRev8.
-
         Resets the DDS I/O interface.
         Does not pulse the DDS ``MASTER_RESET`` as that confuses the AD9910.
         """
         cfg = self.cpld.cfg_reg
         # Don't pulse MASTER_RESET (m-labs/artiq#940)
-        self.cpld.cfg_reg = cfg | (0 << ProtoRev8.CFG_RST) | (1 << ProtoRev8.CFG_IO_RST)
+        self.cpld.cfg_reg = (
+            cfg | int64(0 << ProtoRev8.CFG_RST) | int64(1 << ProtoRev8.CFG_IO_RST)
+        )
         # Preemptively enable the SPI. Voltages of both common mode and
         # differential are too small initially.
         # This dummy config value is similar to the coming SPI config
         self.cpld.bus.set_config_mu(SPI_CONFIG, 24, SPIT_CFG_WR, CS_CFG)
-        delay(1 * us)
+        self.cpld.core.delay(1.0 * us)
         if blind:
             self.cpld.cfg_write(self.cpld.cfg_reg)
-        elif urukul_sta_proto_rev(self.sta_read())!= STA_PROTO_REV_8:
+        elif urukul_sta_proto_rev(self.sta_read()) != STA_PROTO_REV_8:
             raise ValueError("Urukul proto_rev mismatch")
-        delay(100 * us)  # reset, slack
+        self.cpld.core.delay(100. * us)  # reset, slack
         self.cpld.cfg_write(cfg)
-        if self.cpld.sync_div:
-            at_mu(now_mu() & ~0xF)  # align to RTIO/2
+        if bool(self.cpld.sync_div):
+            at_mu(now_mu() & ~int64(0xF))  # align to RTIO/2
             self.cpld.set_sync_div(self.cpld.sync_div)  # 125 MHz/2 = 1 GHz/16
-        delay(1 * ms)  # DDS wake up
+        self.cpld.core.delay(1.0 * ms)  # DDS wake up
 
     @kernel
     def io_rst(self):
         """Pulse IO_RST"""
-        self.cpld.cfg_write(self.cpld.cfg_reg | (1 << ProtoRev8.CFG_IO_RST))
-        self.cpld.cfg_write(self.cpld.cfg_reg & ~(1 << ProtoRev8.CFG_IO_RST))
+        self.cpld.cfg_write(self.cpld.cfg_reg | int64(1 << ProtoRev8.CFG_IO_RST))
+        self.cpld.cfg_write(self.cpld.cfg_reg & ~int64(1 << ProtoRev8.CFG_IO_RST))
 
     @kernel
-    def set_profile(self, channel: TInt32, profile: TInt32):
+    def set_profile(self, channel: int32, profile: int32):
         """Set the PROFILE pins.
-
         The PROFILE pins are common to all four DDS channels.
-
         :param channel: Channel index (0-3). Unused (here for backwards compatability).
         :param profile: PROFILE pins in numeric representation (0-7).
         """
-        cfg = self.cpld.cfg_reg & ~(7 << CFG_PROFILE)
+        cfg = int32(self.cpld.cfg_reg) & ~(7 << CFG_PROFILE)
         cfg |= (profile & 7) << CFG_PROFILE
-        self.cpld.cfg_write(cfg)
+        self.cpld.cfg_write(int64(cfg))
 
     @kernel
-    def _configure_bit(self, bit_offset: TInt32, channel: TInt32, on: TBool):
+    def _configure_bit(self, bit_offset: int32, channel: int32, on: bool):
         """Configure a single bit in the configuration register.
-
         :param bit_offset: Base bit offset for the configuration type
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
         c = self.cpld.cfg_reg
         if on:
-            c |= 1 << (bit_offset + channel)
+            c |= int64(1 << (bit_offset + channel))
         else:
-            c &= ~(1 << (bit_offset + channel))
+            c &= ~int64(1 << (bit_offset + channel))
         self.cpld.cfg_write(c)
 
     @kernel
-    def _configure_all_bits(self, bit_offset: TInt32, state: TInt32):
+    def _configure_all_bits(self, bit_offset: int32, state: int32):
         """Configure all four bits at a specific bit offset in the configuration register.
-
         :param bit_offset: bit offset for the configuration bits
         :param state: State as a 4-bit integer
         """
         self.cpld.cfg_write(
-            (self.cpld.cfg_reg & ~(0xF << bit_offset)) | (int64(state) << bit_offset)
+            (int64(self.cpld.cfg_reg) & ~int64(0xF << bit_offset))
+            | int64(state << bit_offset)
         )
 
     @kernel
-    def cfg_mask_nu(self, channel: TInt32, on: TBool):
+    def cfg_mask_nu(self, channel: int32, on: bool):
         """Configure the MASK_NU bit for the given channel in the configuration register.
-
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
         self.cpld._configure_bit(ProtoRev8.CFG_MASK_NU, channel, on)
 
     @kernel
-    def cfg_mask_nu_all(self, state: TInt32):
+    def cfg_mask_nu_all(self, state: int32):
         """Configure all four MASK_NU bits in the configuration register.
-
         :param state: MASK_NU state as a 4-bit integer.
         """
         self.cpld._configure_all_bits(ProtoRev8.CFG_MASK_NU, state)
 
     @kernel
-    def cfg_io_update(self, channel: TInt32, on: TBool):
+    def cfg_io_update(self, channel: int32, on: bool):
         """Configure the IO_UPDATE bit in the configuration register.
 
         :param channel: Channel index (0-3). Unused (here for backwards compatability).
@@ -404,7 +414,7 @@ class ProtoRev8(CPLDVersion):
         self.cpld._configure_bit(ProtoRev8.CFG_IO_UPDATE, 0, on)
 
     @kernel
-    def cfg_io_update_all(self, state: TInt32):
+    def cfg_io_update_all(self, state: int32):
         """Configure the IO_UPDATE bit in the configuration register.
 
         :param state: IO_UPDATE state as a 4-bit integer.
@@ -412,49 +422,88 @@ class ProtoRev8(CPLDVersion):
         """
         self.cfg_io_update(0, (state & 0xF) != 0)
 
+    @kernel
+    def cfg_att_en(self, channel: int32, on: bool):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_att_en not supported on ProtoRev8")
 
+    @kernel
+    def cfg_att_en_all(self, state: int32):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_att_en_all not supported on ProtoRev8")
+
+    @kernel
+    def cfg_osk(self, channel: int32, on: bool):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_osk not supported on ProtoRev8")
+
+    @kernel
+    def cfg_osk_all(self, state: int32):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_osk_all not supported on ProtoRev8")
+
+    @kernel
+    def cfg_drctl(self, channel: int32, on: bool):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_drctl not supported on ProtoRev8")
+
+    @kernel
+    def cfg_drctl_all(self, state: int32):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_drctl_all not supported on ProtoRev8")
+
+    @kernel
+    def cfg_drhold(self, channel: int32, on: bool):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_drhold not supported on ProtoRev8")
+
+    @kernel
+    def cfg_drhold_all(self, state: int32):
+        """Not supported on ProtoRev8."""
+        raise ValueError("cfg_drhold_all not supported on ProtoRev8")
+
+
+@compile
 class ProtoRev9(CPLDVersion):
     """
     Implementation of the CPLD for Urukul ProtoRev9.
     """
 
-    def __init__(self, cpld):
-        super().__init__(cpld)
-
+    cpld: KernelInvariant[CPLD[ProtoRev9]]
     # ProtoRev9 CFG configuration register bit offsets
-    CFG_OSK = 20
-    CFG_DRCTL = 24
-    CFG_DRHOLD = 28
-    CFG_IO_UPDATE = 32
-    CFG_MASK_NU = 36
-    CFG_CLK_SEL0 = 40
-    CFG_CLK_SEL1 = 44
-    CFG_SYNC_SEL = 41
-    CFG_RST = 42
-    CFG_IO_RST = 43
-    CFG_CLK_DIV = 45
-    CFG_ATT_EN = 47
+    CFG_OSK: Kernel[int32] = 20
+    CFG_DRCTL: Kernel[int32] = 24
+    CFG_DRHOLD: Kernel[int32] = 28
+    CFG_IO_UPDATE: Kernel[int32] = 32
+    CFG_MASK_NU: Kernel[int32] = 36
+    CFG_CLK_SEL0: Kernel[int32] = 40
+    CFG_CLK_SEL1: Kernel[int32] = 44
+    CFG_SYNC_SEL: Kernel[int32] = 41
+    CFG_RST: Kernel[int32] = 42
+    CFG_IO_RST: Kernel[int32] = 43
+    CFG_CLK_DIV: Kernel[int32] = 45
+    CFG_ATT_EN: Kernel[int32] = 47
 
-    @staticmethod
     @portable
     def urukul_cfg(
-        rf_sw,
-        led,
-        profile,
-        osk,
-        drctl,
-        drhold,
-        io_update,
-        mask_nu,
-        clk_sel,
-        sync_sel,
-        rst,
-        io_rst,
-        clk_div,
-        att_en,
-    ):
+        self,
+        rf_sw: int32,
+        led: int32,
+        profile: int32,
+        osk: int32,
+        drctl: int32,
+        drhold: int32,
+        io_update: int32,
+        mask_nu: int32,
+        clk_sel: int32,
+        sync_sel: int32,
+        rst: int32,
+        io_rst: int32,
+        clk_div: int32,
+        att_en: int32,
+    ) -> int64:
         """Build Urukul CPLD configuration register"""
-        return (
+        return int64(
             (rf_sw << CFG_RF_SW)
             | (led << CFG_LED)
             | (profile << CFG_PROFILE)
@@ -473,140 +522,131 @@ class ProtoRev9(CPLDVersion):
         )
 
     @kernel
-    def cfg_write(self, cfg: TInt64):
+    def cfg_write(self, cfg: int64):
         """Write to the configuration register.
-
         See :func:`urukul_cfg` for possible flags.
-
         :param cfg: 52-bit data to be written. Will be stored at
             :attr:`cfg_reg`.
         """
         self.cpld.bus.set_config_mu(SPI_CONFIG, 24, SPIT_CFG_WR, CS_CFG)
-        self.cpld.bus.write(((cfg >> 28) & 0xFFFFFF) << 8)
-        self.cpld.bus.set_config_mu(SPI_CONFIG | spi.SPI_END, 28, SPIT_CFG_WR, CS_CFG)
-        self.cpld.bus.write((cfg & 0xFFFFFFF) << 4)
-        self.cpld.cfg_reg = int64(cfg)
+        self.cpld.bus.write((int32(cfg >> 28) & 0xFFFFFF) << 8)
+        self.cpld.bus.set_config_mu(SPI_CONFIG | SPI_END, 28, SPIT_CFG_WR, CS_CFG)
+        self.cpld.bus.write((int32(cfg) & 0xFFFFFFF) << 4)
+        self.cpld.cfg_reg = cfg
 
     @kernel
-    def sta_read(self) -> TInt32:
+    def sta_read(self) -> int32:
         """Read the status register.
-
         Use any of the following functions to extract values:
-
             * :func:`urukul_sta_rf_sw`
             * :func:`urukul_sta_smp_err`
             * :func:`urukul_sta_pll_lock`
             * :func:`urukul_sta_ifc_mode`
             * :func:`urukul_sta_proto_rev`
             * :func:`urukul_sta_drover`
-
         :return: The status register value.
         """
         self.cpld.bus.set_config_mu(SPI_CONFIG, 24, SPIT_CFG_WR, CS_CFG)
-        self.cpld.bus.write(((self.cpld.cfg_reg >> 28) & 0xFFFFFF) << 8)
+        self.cpld.bus.write((int32((self.cpld.cfg_reg >> 28) & int64(0xFFFFFF)) << 8))
         self.cpld.bus.set_config_mu(
-            SPI_CONFIG | spi.SPI_END | spi.SPI_INPUT, 28, SPIT_CFG_RD, CS_CFG
+            SPI_CONFIG | SPI_END | SPI_INPUT, 28, SPIT_CFG_RD, CS_CFG
         )
-        self.cpld.bus.write((self.cpld.cfg_reg & 0xFFFFFFF) << 4)
+        self.cpld.bus.write(int32((self.cpld.cfg_reg & int64(0xFFFFFFF)) << 4))
         return self.cpld.bus.read()
 
     @kernel
-    def init(self, blind):
+    def init(self, blind: bool):
         """Initialize Urukul with ProtoRev9.
-
         Resets the DDS I/O interface.
         Does not pulse the DDS ``MASTER_RESET`` as that confuses the AD9910.
         """
         cfg = self.cpld.cfg_reg
         # Don't pulse MASTER_RESET (m-labs/artiq#940)
-        self.cpld.cfg_reg = cfg | (int64(0) << ProtoRev9.CFG_RST) | (int64(1) << ProtoRev9.CFG_IO_RST)
+        self.cpld.cfg_reg = (
+            cfg | (int64(0) << ProtoRev9.CFG_RST) | (int64(1) << ProtoRev9.CFG_IO_RST)
+        )
         # Preemptively enable the SPI. Voltages of both common mode and
         # differential are too small initially.
         # This dummy config value is the coming SPI config
         self.cpld.bus.set_config_mu(SPI_CONFIG, 24, SPIT_CFG_WR, CS_CFG)
-        delay(1 * us)
+        self.cpld.core.delay(1.0 * us)
         if blind:
             self.cpld.cfg_write(self.cpld.cfg_reg)
         elif urukul_sta_proto_rev(self.sta_read()) != STA_PROTO_REV_9:
             raise ValueError("Urukul proto_rev mismatch")
-        delay(100 * us)  # reset, slack
+        self.cpld.core.delay(100. * us)  # reset, slack
         self.cpld.cfg_write(cfg)
-        if self.cpld.sync_div:
-            at_mu(now_mu() & ~0xF)  # align to RTIO/2
+        if bool(self.cpld.sync_div):
+            at_mu(now_mu() & ~int64(0xF))  # align to RTIO/2
             self.cpld.set_sync_div(self.cpld.sync_div)  # 125 MHz/2 = 1 GHz/16
-        delay(1 * ms)  # DDS wake up
+        self.cpld.core.delay(1.0 * ms)  # DDS wake up
 
     @kernel
     def io_rst(self):
         """Pulse IO_RST"""
-        self.cpld.cfg_write(self.cpld.cfg_reg | (int64(1) << int64(ProtoRev9.CFG_IO_RST)))
-        self.cpld.cfg_write(self.cpld.cfg_reg & ~(int64(1) << int64(ProtoRev9.CFG_IO_RST)))
+        self.cpld.cfg_write(self.cpld.cfg_reg | (int64(1) << ProtoRev9.CFG_IO_RST))
+        self.cpld.cfg_write(self.cpld.cfg_reg & ~(int64(1) << ProtoRev9.CFG_IO_RST))
 
     @kernel
-    def set_profile(self, channel: TInt32, profile: TInt32):
+    def set_profile(self, channel: int32, profile: int32):
         """Set the CFG.PROFILE[0:2] pins for the given channel.
-
         :param channel: Channel (0-3).
         :param profile: PROFILE pins in numeric representation (0-7).
         """
-        cfg = self.cpld.cfg_reg & ~(7 << (CFG_PROFILE + channel * 3))
-        cfg |= (profile & 7) << (CFG_PROFILE + channel * 3)
+        cfg = self.cpld.cfg_reg & ~int64(7 << (CFG_PROFILE + channel * 3))
+        cfg |= int64((profile & 7) << (CFG_PROFILE + channel * 3))
         self.cpld.cfg_write(cfg)
 
     @kernel
-    def _configure_bit(self, bit_offset: TInt32, channel: TInt32, on: TBool):
+    def _configure_bit(self, bit_offset: int32, channel: int32, on: bool):
         """Configure a single bit in the configuration register.
-
         :param bit_offset: Base bit offset for the configuration type
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
         c = self.cpld.cfg_reg
         if on:
-            c |= int64(1) << (bit_offset + channel)
+            c = int64(c) | int64(1) << (bit_offset + channel)
         else:
-            c &= ~(int64(1) << (bit_offset + channel))
+            c = int64(c) & ~(int64(1) << (bit_offset + channel))
         self.cpld.cfg_write(c)
 
     @kernel
-    def _configure_all_bits(self, bit_offset: TInt32, state: TInt32):
+    def _configure_all_bits(self, bit_offset: int32, state: int32):
         """Configure all four bits at a specific bit offset in the configuration register.
-
         :param bit_offset: bit offset for the configuration bits
         :param state: State as a 4-bit integer
         """
         self.cpld.cfg_write(
-            (self.cpld.cfg_reg & ~(int64(0xF) << bit_offset)) | (int64(state) << bit_offset)
+            (int64(self.cpld.cfg_reg) & ~(int64(0xF) << bit_offset))
+            | (int64(state) << bit_offset)
         )
 
     @kernel
-    def cfg_mask_nu(self, channel: TInt32, on: TBool):
+    def cfg_mask_nu(self, channel: int32, on: bool):
         """Configure the MASK_NU bit for the given channel in the configuration register.
-
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
         self.cpld._configure_bit(ProtoRev9.CFG_MASK_NU, channel, on)
 
     @kernel
-    def cfg_mask_nu_all(self, state: TInt32):
+    def cfg_mask_nu_all(self, state: int32):
         """Configure all four MASK_NU bits in the configuration register.
-
         :param state: MASK_NU state as a 4-bit integer.
         """
         self.cpld._configure_all_bits(ProtoRev9.CFG_MASK_NU, state)
 
     @kernel
-    def cfg_att_en(self, channel: TInt32, on: TBool):
+    def cfg_att_en(self, channel: int32, on: bool):
         """Configure the ATT_EN bit for the given channel in the configuration register.
-
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
         self.cpld._configure_bit(ProtoRev9.CFG_ATT_EN, channel, on)
 
     @kernel
-    def cfg_att_en_all(self, state: TInt32):
+    def cfg_att_en_all(self, state: int32):
         """Configure all four ATT_EN bits in the configuration register.
 
         :param state: ATT_EN state as a 4-bit integer.
@@ -614,58 +654,52 @@ class ProtoRev9(CPLDVersion):
         self.cpld._configure_all_bits(ProtoRev9.CFG_ATT_EN, state)
 
     @kernel
-    def cfg_osk(self, channel: TInt32, on: TBool):
+    def cfg_osk(self, channel: int32, on: bool):
         """Configure the OSK bit for the given channel in the configuration register.
-
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
         self.cpld._configure_bit(ProtoRev9.CFG_OSK, channel, on)
 
     @kernel
-    def cfg_osk_all(self, state: TInt32):
+    def cfg_osk_all(self, state: int32):
         """Configure all four OSK bits in the configuration register.
-
         :param state: OSK state as a 4-bit integer.
         """
         self.cpld._configure_all_bits(ProtoRev9.CFG_OSK, state)
 
     @kernel
-    def cfg_drctl(self, channel: TInt32, on: TBool):
+    def cfg_drctl(self, channel: int32, on: bool):
         """Configure the DRCTL bit for the given channel in the configuration register.
-
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
         self.cpld._configure_bit(ProtoRev9.CFG_DRCTL, channel, on)
 
     @kernel
-    def cfg_drctl_all(self, state: TInt32):
+    def cfg_drctl_all(self, state: int32):
         """Configure all four DRCTL bits in the configuration register.
-
         :param state: DRCTL state as a 4-bit integer.
         """
         self.cpld._configure_all_bits(ProtoRev9.CFG_DRCTL, state)
 
     @kernel
-    def cfg_drhold(self, channel: TInt32, on: TBool):
+    def cfg_drhold(self, channel: int32, on: bool):
         """Configure the DRHOLD bit for the given channel in the configuration register.
-
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
         self.cpld._configure_bit(ProtoRev9.CFG_DRHOLD, channel, on)
 
     @kernel
-    def cfg_drhold_all(self, state: TInt32):
+    def cfg_drhold_all(self, state: int32):
         """Configure all four DRHOLD bits in the configuration register.
-
         :param state: DRHOLD state as a 4-bit integer.
         """
         self.cpld._configure_all_bits(ProtoRev9.CFG_DRHOLD, state)
 
     @kernel
-    def cfg_io_update(self, channel: TInt32, on: TBool):
+    def cfg_io_update(self, channel: int32, on: bool):
         """Configure the IO_UPDATE bit for the given channel in the configuration register.
 
         :param channel: Channel index (0-3)
@@ -674,7 +708,7 @@ class ProtoRev9(CPLDVersion):
         self.cpld._configure_bit(ProtoRev9.CFG_IO_UPDATE, channel, on)
 
     @kernel
-    def cfg_io_update_all(self, state: TInt32):
+    def cfg_io_update_all(self, state: int32):
         """Configure all four IO_UPDATE bits in the configuration register.
 
         :param state: IO_UPDATE state as a 4-bit integer.
@@ -682,7 +716,11 @@ class ProtoRev9(CPLDVersion):
         self.cpld._configure_all_bits(ProtoRev9.CFG_IO_UPDATE, state)
 
 
-class CPLD:
+V = TypeVar("V", ProtoRev8, ProtoRev9)
+
+
+@compile
+class CPLD(Generic[V]):
     """Urukul CPLD SPI router and configuration interface.
 
     :param spi_device: SPI bus device name
@@ -714,7 +752,6 @@ class CPLD:
     :param sync_div: ``SYNC_IN`` generator divider. The ratio between the coarse
         RTIO frequency and the ``SYNC_IN`` generator frequency (default: 2 if
         `sync_device` was specified).
-    :param proto_rev: CPLD protocol revision
     :param core_device: Core device name
 
     If the clocking is incorrect (for example, setting ``clk_sel`` to the
@@ -722,14 +759,36 @@ class CPLD:
     the DDS channels can fail with the error message ``PLL lock timeout``.
     """
 
-    kernel_invariants = {"refclk", "bus", "core", "io_update", "clk_div", "proto_rev"}
+    core: KernelInvariant[Core]
+    refclk: KernelInvariant[float]
+    bus: KernelInvariant[SPIMaster]
+    io_update: KernelInvariant[TTLOut]  # https://git.m-labs.hk/M-Labs/nac3/issues/664
+    clk_div: KernelInvariant[int32]
+    dds_reset: KernelInvariant[Option[TTLOut]]
+    sync: KernelInvariant[Option[TTLClockGen]]
+    cfg_reg: Kernel[int64]
+    att_reg: Kernel[int32]
+    sync_div: Kernel[int32]
+    proto_rev: Kernel[int32]
+    version: KernelInvariant[V]
 
-    def __init__(self, dmgr, spi_device, io_update_device=None,
-                 dds_reset_device=None, sync_device=None,
-                 sync_sel=0, clk_sel=0, clk_div=0, rf_sw=0,
-                 refclk=125e6, att=0x00000000, sync_div=None,
-                 proto_rev=0x09, core_device="core"):
-
+    def __init__(
+        self,
+        dmgr,
+        spi_device,
+        io_update_device=None,
+        dds_reset_device=None,
+        sync_device=None,
+        sync_sel=0,
+        clk_sel=0,
+        clk_div=0,
+        rf_sw=0,
+        refclk=125e6,
+        att=0x00000000,
+        sync_div=None,
+        proto_rev=0x09,
+        core_device="core",
+    ):
         self.core = dmgr.get(core_device)
         self.refclk = refclk
         assert 0 <= clk_div <= 3
@@ -741,13 +800,15 @@ class CPLD:
         else:
             self.io_update = io_update_device
         if dds_reset_device is not None:
-            self.dds_reset = dmgr.get(dds_reset_device)
+            self.dds_reset = Some(dmgr.get(dds_reset_device))
+        else:
+            self.dds_reset = none
         if sync_device is not None:
-            self.sync = dmgr.get(sync_device)
+            self.sync = Some(dmgr.get(sync_device))
             if sync_div is None:
                 sync_div = 2
         else:
-            self.sync = _DummySync(self)
+            self.sync = none
             assert sync_div is None
             sync_div = 0
 
@@ -760,51 +821,53 @@ class CPLD:
             raise ValueError(f"Urukul unsupported proto_rev: {proto_rev}")
 
         if self.proto_rev == STA_PROTO_REV_8:
-            self.cfg_reg = int64(ProtoRev8.urukul_cfg(
-                rf_sw=rf_sw,
-                led=0,
-                profile=DEFAULT_PROFILE,
-                io_update=0,
-                mask_nu=0,
-                clk_sel=clk_sel,
-                sync_sel=sync_sel,
-                rst=0,
-                io_rst=0,
-                clk_div=clk_div,
-            ))
+            self.cfg_reg = int64(
+                self.version.urukul_cfg(
+                    rf_sw=rf_sw,
+                    led=0,
+                    profile=DEFAULT_PROFILE,
+                    io_update=0,
+                    mask_nu=0,
+                    clk_sel=clk_sel,
+                    sync_sel=sync_sel,
+                    rst=0,
+                    io_rst=0,
+                    clk_div=clk_div,
+                ))
         else:
-            self.cfg_reg = int64(ProtoRev9.urukul_cfg(
-                rf_sw=rf_sw,
-                led=0,
-                profile=(DEFAULT_PROFILE << 9)
-                | (DEFAULT_PROFILE << 6)
-                | (DEFAULT_PROFILE << 3)
-                | DEFAULT_PROFILE,
-                osk=0,
-                drctl=0,
-                drhold=0,
-                io_update=0,
-                mask_nu=0,
-                clk_sel=clk_sel,
-                sync_sel=sync_sel,
-                rst=0,
-                io_rst=0,
-                clk_div=clk_div,
-                att_en=0b1111,
-            ))
+            self.cfg_reg = int64(
+                self.version.urukul_cfg(
+                    rf_sw=rf_sw,
+                    led=0,
+                    profile=(DEFAULT_PROFILE << 9)
+                    | (DEFAULT_PROFILE << 6)
+                    | (DEFAULT_PROFILE << 3)
+                    | DEFAULT_PROFILE,
+                    osk=0,
+                    drctl=0,
+                    drhold=0,
+                    io_update=0,
+                    mask_nu=0,
+                    clk_sel=clk_sel,
+                    sync_sel=sync_sel,
+                    rst=0,
+                    io_rst=0,
+                    clk_div=clk_div,
+                    att_en=0b1111,
+                ))
         self.att_reg = int32(int64(att))
         self.sync_div = sync_div
 
     @kernel
-    def cfg_write(self, cfg):
-        self.version.cfg_write(int64(cfg))
+    def cfg_write(self, cfg: int64):
+        self.version.cfg_write(cfg)
 
     @kernel
-    def sta_read(self):
+    def sta_read(self) -> int32:
         return self.version.sta_read()
 
     @kernel
-    def init(self, blind=False):
+    def init(self, blind: bool = False):
         self.version.init(blind)
 
     @kernel
@@ -812,67 +875,67 @@ class CPLD:
         self.version.io_rst()
 
     @kernel
-    def set_profile(self, channel: TInt32, profile: TInt32):
+    def set_profile(self, channel: int32, profile: int32):
         self.version.set_profile(channel, profile)
 
     @kernel
-    def _configure_bit(self, bit_offset: TInt32, channel: TInt32, on: TBool):
+    def _configure_bit(self, bit_offset: int32, channel: int32, on: bool):
         self.version._configure_bit(bit_offset, channel, on)
 
     @kernel
-    def _configure_all_bits(self, bit_offset: TInt32, state: TInt32):
+    def _configure_all_bits(self, bit_offset: int32, state: int32):
         self.version._configure_all_bits(bit_offset, state)
 
     @kernel
-    def cfg_mask_nu(self, channel: TInt32, on: TBool):
+    def cfg_mask_nu(self, channel: int32, on: bool):
         self.version.cfg_mask_nu(channel, on)
 
     @kernel
-    def cfg_mask_nu_all(self, state: TInt32):
+    def cfg_mask_nu_all(self, state: int32):
         self.version.cfg_mask_nu_all(state)
 
     @kernel
-    def cfg_att_en(self, channel: TInt32, on: TBool):
+    def cfg_att_en(self, channel: int32, on: bool):
         self.version.cfg_att_en(channel, on)
 
     @kernel
-    def cfg_att_en_all(self, state: TInt32):
+    def cfg_att_en_all(self, state: int32):
         self.version.cfg_att_en_all(state)
 
     @kernel
-    def cfg_osk(self, channel: TInt32, on: TBool):
+    def cfg_osk(self, channel: int32, on: bool):
         self.version.cfg_osk(channel, on)
 
     @kernel
-    def cfg_osk_all(self, state: TInt32):
+    def cfg_osk_all(self, state: int32):
         self.version.cfg_osk_all(state)
 
     @kernel
-    def cfg_drctl(self, channel: TInt32, on: TBool):
+    def cfg_drctl(self, channel: int32, on: bool):
         self.version.cfg_drctl(channel, on)
 
     @kernel
-    def cfg_drctl_all(self, state: TInt32):
+    def cfg_drctl_all(self, state: int32):
         self.version.cfg_drctl_all(state)
 
     @kernel
-    def cfg_drhold(self, channel: TInt32, on: TBool):
+    def cfg_drhold(self, channel: int32, on: bool):
         self.version.cfg_drhold(channel, on)
 
     @kernel
-    def cfg_drhold_all(self, state: TInt32):
+    def cfg_drhold_all(self, state: int32):
         self.version.cfg_drhold_all(state)
     
     @kernel
-    def cfg_io_update(self, channel: TInt32, on: TBool):
+    def cfg_io_update(self, channel: int32, on: bool):
         self.version.cfg_io_update(channel, on)
 
     @kernel
-    def cfg_io_update_all(self, state: TInt32):
+    def cfg_io_update_all(self, state: int32):
         self.version.cfg_io_update_all(state)
 
     @kernel
-    def cfg_sw(self, channel: TInt32, on: TBool):
+    def cfg_sw(self, channel: int32, on: bool):
         """Configure the RF switches through the configuration register.
 
         These values are logically OR-ed with the LVDS lines on EEM1.
@@ -882,21 +945,21 @@ class CPLD:
         """
         c = self.cfg_reg
         if on:
-            c |= 1 << channel
+            c |= int64(1 << channel)
         else:
-            c &= ~(1 << channel)
+            c &= ~int64(1 << channel)
         self.cfg_write(c)
 
     @kernel
-    def cfg_switches(self, state: TInt32):
+    def cfg_switches(self, state: int32):
         """Configure all four RF switches through the configuration register.
 
         :param state: RF switch state as a 4-bit integer.
         """
-        self.cfg_write((self.cfg_reg & ~0xF) | state)
+        self.cfg_write((self.cfg_reg & ~int64(0xF)) | int64(state))
 
-    @portable(flags={"fast-math"})
-    def mu_to_att(self, att_mu: TInt32) -> TFloat:
+    @portable
+    def mu_to_att(self, att_mu: int32) -> float:
         """Convert a digital attenuation setting to dB.
 
         :param att_mu: Digital attenuation setting.
@@ -904,20 +967,20 @@ class CPLD:
         """
         return (255 - (att_mu & 0xFF)) / 8
 
-    @portable(flags={"fast-math"})
-    def att_to_mu(self, att: TFloat) -> TInt32:
+    @portable
+    def att_to_mu(self, att: float) -> int32:
         """Convert an attenuation setting in dB to machine units.
 
         :param att: Attenuation setting in dB.
         :return: Digital attenuation setting.
         """
-        code = int32(255) - int32(round(att * 8))
+        code = 255 - round(att * 8.0)
         if code < 0 or code > 255:
             raise ValueError("Invalid urukul.CPLD attenuation!")
         return code
 
     @kernel
-    def set_att_mu(self, channel: TInt32, att: TInt32):
+    def set_att_mu(self, channel: int32, att: int32):
         """Set digital step attenuator in machine units.
 
         This method will also write the attenuator settings of the three
@@ -933,21 +996,21 @@ class CPLD:
         self.set_all_att_mu(a)
 
     @kernel
-    def set_all_att_mu(self, att_reg: TInt32):
+    def set_all_att_mu(self, att_reg: int32):
         """Set all four digital step attenuators (in machine units).
         See also :meth:`set_att_mu`.
 
         :param att_reg: Attenuator setting string (32-bit)
         """
-        self.bus.set_config_mu(SPI_CONFIG | spi.SPI_END, 32,
-                               SPIT_ATT_WR, CS_ATT)
+        self.bus.set_config_mu(SPI_CONFIG | SPI_END, 32, SPIT_ATT_WR, CS_ATT)
         self.bus.write(att_reg)
         self.att_reg = att_reg
 
     @kernel
-    def set_att(self, channel: TInt32, att: TFloat):
+    def set_att(self, channel: int32, att: float):
         """Set digital step attenuator in SI units.
 
+        This method will write the attenuator settings of all four channels.
         See also :meth:`set_att_mu`.
 
         :param channel: Attenuator channel (0-3).
@@ -958,7 +1021,7 @@ class CPLD:
         self.set_att_mu(channel, self.att_to_mu(att))
 
     @kernel
-    def get_att_mu(self) -> TInt32:
+    def get_att_mu(self) -> int32:
         """Return the digital step attenuator settings in machine units.
 
         The result is stored and will be used in future calls of
@@ -968,18 +1031,16 @@ class CPLD:
 
         :return: 32-bit attenuator settings
         """
-        self.bus.set_config_mu(SPI_CONFIG | spi.SPI_INPUT, 32,
-                               SPIT_ATT_RD, CS_ATT)
+        self.bus.set_config_mu(SPI_CONFIG | SPI_INPUT, 32, SPIT_ATT_RD, CS_ATT)
         self.bus.write(0)  # shift in zeros, shift out current value
-        self.bus.set_config_mu(SPI_CONFIG | spi.SPI_END, 32,
-                               SPIT_ATT_WR, CS_ATT)
-        delay(10 * us)
+        self.bus.set_config_mu(SPI_CONFIG | SPI_END, 32, SPIT_ATT_WR, CS_ATT)
+        self.core.delay(10.0 * us)
         self.att_reg = self.bus.read()
         self.bus.write(self.att_reg)  # shift in current value again and latch
         return self.att_reg
 
     @kernel
-    def get_channel_att_mu(self, channel: TInt32) -> TInt32:
+    def get_channel_att_mu(self, channel: int32) -> int32:
         """Get digital step attenuator value for a channel in machine units.
 
         The result is stored and will be used in future calls of
@@ -994,7 +1055,7 @@ class CPLD:
         return int32((self.get_att_mu() >> (channel * 8)) & 0xFF)
 
     @kernel
-    def get_channel_att(self, channel: TInt32) -> TFloat:
+    def get_channel_att(self, channel: int32) -> float:
         """Get digital step attenuator value for a channel in SI units.
 
         See also :meth:`get_channel_att_mu`.
@@ -1007,7 +1068,7 @@ class CPLD:
         return self.mu_to_att(self.get_channel_att_mu(channel))
 
     @kernel
-    def set_sync_div(self, div: TInt32):
+    def set_sync_div(self, div: int32):
         """Set the ``SYNC_IN`` AD9910 pulse generator frequency
         and align it to the current RTIO timestamp.
 
@@ -1021,4 +1082,5 @@ class CPLD:
         ftw_max = 1 << 4
         ftw = ftw_max // div
         assert ftw * div == ftw_max
-        self.sync.set_mu(ftw)
+        if self.sync.is_some():
+            self.sync.unwrap().set_mu(ftw)

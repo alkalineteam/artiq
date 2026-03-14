@@ -50,13 +50,6 @@ def peripheral_urukul(module, peripheral, **kwargs):
         peripheral["dds"], peripheral["proto_rev"], sync_gen_cls, **kwargs)
 
 
-def peripheral_novogorny(module, peripheral, **kwargs):
-    if len(peripheral["ports"]) != 1:
-        raise ValueError("wrong number of ports")
-    eem.Novogorny.add_std(module, peripheral["ports"][0],
-        ttl_serdes_7series.Output_8X, **kwargs)
-
-
 def peripheral_sampler(module, peripheral, **kwargs):
     if len(peripheral["ports"]) == 1:
         port, port_aux = peripheral["ports"][0], None
@@ -165,7 +158,6 @@ peripheral_processors = {
     "dio": peripheral_dio,
     "dio_spi": peripheral_dio_spi,
     "urukul": peripheral_urukul,
-    "novogorny": peripheral_novogorny,
     "sampler": peripheral_sampler,
     "suservo": peripheral_suservo,
     "zotino": peripheral_zotino,

@@ -10,15 +10,6 @@ if sys.version_info[:2] < (3, 11):
     raise Exception("You need Python 3.11+")
 
 
-# Depends on PyQt6, but setuptools cannot check for it.
-requirements = [
-    "numpy", "scipy",
-    "python-dateutil", "prettytable", "h5py", "lmdb",
-    "qasync", "pyqtgraph", "pygit2",
-    "llvmlite", "pythonparser", "levenshtein",
-    "platformdirs",
-]
-
 console_scripts = [
     "artiq_client = artiq.frontend.artiq_client:main",
     "artiq_compile = artiq.frontend.artiq_compile:main",
@@ -63,13 +54,11 @@ Intended Audience :: Science/Research
 License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)
 Operating System :: Microsoft :: Windows
 Operating System :: POSIX :: Linux
-Programming Language :: Python :: 3.7
+Programming Language :: Python :: 3.9
 Topic :: Scientific/Engineering :: Physics
 Topic :: System :: Hardware
 """.splitlines(),
-    install_requires=requirements,
-    extras_require={},
-    packages=find_namespace_packages(exclude=["artiq.test.lit", "artiq.test.lit.*", "doc.manual"], ),
+    packages=find_namespace_packages(exclude=["doc.manual"]),
     namespace_packages=[],
     include_package_data=True,
     ext_modules=[],

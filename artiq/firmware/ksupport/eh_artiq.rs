@@ -328,7 +328,7 @@ extern fn stop_fn(_version: c_int,
     }
 }
 
-// Must be kept in sync with `artiq.compiler.embedding`
+// Must be kept in sync with `nac3artiq::Nac3::new`
 static EXCEPTION_ID_LOOKUP: [(&str, u32); 24] = [
     ("RTIOUnderflow", 0),
     ("RTIOOverflow", 1),
@@ -390,4 +390,3 @@ pub extern "C-unwind" fn test_exception_id_sync(exn_id: u32) {
     };
     unsafe { raise(&exn) };
 }
-
