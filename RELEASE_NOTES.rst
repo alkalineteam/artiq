@@ -8,6 +8,8 @@ ARTIQ-10 (Unreleased)
 
 * NAC3 compiler.
 * Multi-channel CoaXpress support.
+* Conda packaging is no longer supported.
+* Novogorny (the ancestor of Sampler) is no longer supported.
 
 ARTIQ-9
 -------
