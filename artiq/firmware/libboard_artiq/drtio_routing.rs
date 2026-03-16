@@ -34,13 +34,54 @@ impl RoutingTable {
 
     // find your own destination number
     // by finding the destination with 0 hop
-    pub fn determine_self_destination(&self) -> u8 {
+    pub fn get_self_destination(&self, rank: u8) -> u8 {
         for i in 0..DEST_COUNT {
-            if self.0[i][0] == 0 {
+            if self.0[i][rank as usize] == 0 {
                 return i as u8;
             }
         }
         0
+    }
+
+    // find the master destination
+    pub fn get_master_destination(&self) -> u8 {
+        self.get_self_destination(0)
+    }
+
+    // get the next hop
+    pub fn get_hop(&self, destination: u8, rank: u8) -> u8 {
+        self.0[destination as usize][rank as usize]
+    }
+
+    // get the link number
+    // returns an Option which is Some(linkno) if it's a downstream destination
+    // None if it's a local or upstream destination
+    pub fn get_linkno(&self, _destination: u8, _rank: u8) -> Option<u8> {
+        #[cfg(has_drtio_routing)]
+        {
+            let hop = self.0[_destination as usize][_rank as usize];
+            #[cfg(has_drtiorep0)]
+            let drtio_len = csr::DRTIOREP.len();
+            #[cfg(not(has_drtiorep0))]
+            let drtio_len = csr::DRTIO.len();
+            if hop == 0 || hop > drtio_len as u8 {
+                None
+            } else {
+                Some(hop - 1)
+            }
+        }
+        #[cfg(not(has_drtio_routing))]
+        {
+            None
+        }
+    }
+
+    pub fn set_hops(&mut self, destination: u8, hops: [u8; MAX_HOPS]) {
+        self.0[destination as usize] = hops;
+    }
+
+    pub fn get_hops(&self, destination: usize) -> [u8; MAX_HOPS] {
+        self.0[destination]
     }
 }
 
@@ -90,7 +131,7 @@ pub fn config_routing_table(default_n_links: usize) -> RoutingTable {
 
 #[cfg(has_drtio_routing)]
 pub fn interconnect_enable(routing_table: &RoutingTable, rank: u8, destination: u8) {
-    let hop = routing_table.0[destination as usize][rank as usize];
+    let hop = routing_table.get_hop(destination, rank);
     unsafe {
         csr::routing_table::destination_write(destination);
         csr::routing_table::hop_write(hop);

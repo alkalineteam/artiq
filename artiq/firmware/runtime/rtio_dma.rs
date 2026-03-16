@@ -267,7 +267,7 @@ impl Manager {
                 // ptr + 3 = tgt >> 24 (destination)
                 let len = trace[ptr] as usize;
                 let destination = trace[ptr+3];
-                let hop = routing_table.0[destination as usize][0];
+                let hop = routing_table.get_hop(destination, 0);
                 if hop == 0 {
                     local_trace.extend(&trace[ptr..ptr+len]);
                 }

@@ -785,7 +785,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 address,
                 length,
             } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 loop {
                     let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                         &Packet::CXPReadRequest {
@@ -820,7 +820,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 address,
                 value,
             } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 loop {
                     let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                         &Packet::CXPWrite32Request {
@@ -856,7 +856,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 x1,
                 y1,
             } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                     &Packet::CXPROIViewerSetupRequest {
                         destination: *destination,
@@ -882,7 +882,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
             }
             #[cfg(has_drtio)]
             kern::CXPROIViewerDataRequest { destination } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 let reply = loop {
                     let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                         &Packet::CXPROIViewerDataRequest { destination: *destination },

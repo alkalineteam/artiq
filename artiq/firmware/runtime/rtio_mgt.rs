@@ -68,7 +68,7 @@ pub mod drtio {
             ddma_mutex: &Mutex, subkernel_mutex: &Mutex) {
 
         unsafe {
-            MASTER_DESTINATION = routing_table.borrow().determine_self_destination();
+            MASTER_DESTINATION = routing_table.borrow().get_master_destination();
         }
         let aux_mutex = aux_mutex.clone();
         let routing_table = routing_table.clone();
@@ -154,7 +154,7 @@ pub mod drtio {
                 drtioaux::Packet::SubkernelException        { destination, .. } |
                 drtioaux::Packet::DmaPlaybackStatus         { destination, .. } |
                 drtioaux::Packet::SubkernelFinished         { destination, .. } => {
-                let hop = routing_table.0[*destination as usize][0];
+                let hop = routing_table.get_hop(*destination, 0);
                 if hop == 0 {
                     false
                 } else {
@@ -254,7 +254,7 @@ pub mod drtio {
         for i in 0..drtio_routing::DEST_COUNT {
             let reply = setup_transact(io, aux_mutex, linkno, &drtioaux::Packet::RoutingSetPath {
                 destination: i as u8,
-                hops: routing_table.0[i]
+                hops: routing_table.get_hops(i),
             })?;
             if reply != drtioaux::Packet::RoutingAck {
                 return Err(Error::UnexpectedReply);
@@ -349,7 +349,7 @@ pub mod drtio {
             up_destinations: &Urc<RefCell<[bool; drtio_routing::DEST_COUNT]>>,
             ddma_mutex: &Mutex, subkernel_mutex: &Mutex) {
         for destination in 0..drtio_routing::DEST_COUNT {
-            let hop = routing_table.0[destination][0];
+            let hop = routing_table.get_hop(destination as u8, 0);
             let destination = destination as u8;
 
             if hop == 0 {
@@ -537,7 +537,7 @@ pub mod drtio {
     pub fn ddma_upload_trace(io: &Io, aux_mutex: &Mutex, ddma_mutex: &Mutex, subkernel_mutex: &Mutex,
             routing_table: &drtio_routing::RoutingTable, id: u32, destination: u8, trace: &[u8]
     ) -> Result<(), Error> {
-        let linkno = routing_table.0[destination as usize][0] - 1;
+        let linkno = routing_table.get_linkno(destination, 0).unwrap();
         partition_data(trace, |slice, status, len: usize| {
             let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                 &drtioaux::Packet::DmaAddTraceRequest {
@@ -552,7 +552,7 @@ pub mod drtio {
 
     pub fn ddma_send_erase(io: &Io, aux_mutex: &Mutex, ddma_mutex: &Mutex, subkernel_mutex: &Mutex,
             routing_table: &drtio_routing::RoutingTable, id: u32, destination: u8) -> Result<(), Error> {
-        let linkno = routing_table.0[destination as usize][0] - 1;
+        let linkno = routing_table.get_linkno(destination, 0).unwrap();
         let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
             &drtioaux::Packet::DmaRemoveTraceRequest { id: id, source: unsafe { MASTER_DESTINATION }, destination: destination })?;
         match reply {
@@ -564,7 +564,7 @@ pub mod drtio {
 
     pub fn ddma_send_playback(io: &Io, aux_mutex: &Mutex, ddma_mutex: &Mutex, subkernel_mutex: &Mutex,
             routing_table: &drtio_routing::RoutingTable, id: u32, destination: u8, timestamp: u64) -> Result<(), Error> {
-        let linkno = routing_table.0[destination as usize][0] - 1;
+        let linkno = routing_table.get_linkno(destination, 0).unwrap();
         let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
             &drtioaux::Packet::DmaPlaybackRequest{ id: id, source: unsafe { MASTER_DESTINATION }, destination: destination, timestamp: timestamp })?;
         match reply {
@@ -578,7 +578,7 @@ pub mod drtio {
     #[cfg(has_rtio_analyzer)]
     fn analyzer_get_data(io: &Io, aux_mutex: &Mutex, ddma_mutex: &Mutex, subkernel_mutex: &Mutex,
         routing_table: &drtio_routing::RoutingTable, destination: u8) -> Result<RemoteBuffer, Error> {
-        let linkno = routing_table.0[destination as usize][0] - 1;
+        let linkno = routing_table.get_linkno(destination, 0).unwrap();
         let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
             &drtioaux::Packet::AnalyzerHeaderRequest { destination: destination })?;
         let (sent, total, overflow) = match reply {
@@ -626,7 +626,7 @@ pub mod drtio {
 
     pub fn subkernel_upload(io: &Io, aux_mutex: &Mutex, ddma_mutex: &Mutex, subkernel_mutex: &Mutex,
             routing_table: &drtio_routing::RoutingTable, id: u32, destination: u8, data: &Vec<u8>) -> Result<(), Error> {
-        let linkno = routing_table.0[destination as usize][0] - 1;
+        let linkno = routing_table.get_linkno(destination, 0).unwrap();
         partition_data(data, |slice, status, len: usize| {
             let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
                 &drtioaux::Packet::SubkernelAddDataRequest {
@@ -643,7 +643,7 @@ pub mod drtio {
     pub fn subkernel_load(io: &Io, aux_mutex: &Mutex, ddma_mutex: &Mutex, subkernel_mutex: &Mutex, 
             routing_table: &drtio_routing::RoutingTable, id: u32, destination: u8, run: bool, timestamp: u64
         ) -> Result<(), Error> {
-        let linkno = routing_table.0[destination as usize][0] - 1;
+        let linkno = routing_table.get_linkno(destination, 0).unwrap();
         let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
             &drtioaux::Packet::SubkernelLoadRunRequest{ 
                 id: id, source: unsafe { MASTER_DESTINATION }, destination: destination,
@@ -660,7 +660,7 @@ pub mod drtio {
     pub fn subkernel_retrieve_exception(io: &Io, aux_mutex: &Mutex, ddma_mutex: &Mutex, subkernel_mutex: &Mutex,
         routing_table: &drtio_routing::RoutingTable, destination: u8
     ) -> Result<Vec<u8>, Error> {
-        let linkno = routing_table.0[destination as usize][0] - 1;
+        let linkno = routing_table.get_linkno(destination, 0).unwrap();
         let mut remote_data: Vec<u8> = Vec::new();
         loop {
             let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
@@ -680,7 +680,7 @@ pub mod drtio {
     pub fn subkernel_send_message(io: &Io, aux_mutex: &Mutex, ddma_mutex: &Mutex, subkernel_mutex: &Mutex,
         routing_table: &drtio_routing::RoutingTable, id: u32, destination: u8, message: &[u8]
     ) -> Result<(), Error> {
-        let linkno = routing_table.0[destination as usize][0] - 1;
+        let linkno = routing_table.get_linkno(destination, 0).unwrap();
         partition_data(message, |slice, status, len: usize| {
             let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
                 &drtioaux::Packet::SubkernelMessage {

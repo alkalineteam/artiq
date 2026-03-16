@@ -259,7 +259,7 @@ impl Repeater {
 
     pub fn load_routing_table(&self, routing_table: &drtio_routing::RoutingTable) -> Result<(), drtioaux::Error<!>> {
         for i in 0..drtio_routing::DEST_COUNT {
-            self.set_path(i as u8, &routing_table.0[i])?;
+            self.set_path(i as u8, &routing_table.get_hops(i))?;
         }
         Ok(())
     }

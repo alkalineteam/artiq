@@ -97,12 +97,11 @@ impl Router {
         #[cfg(has_drtio_routing)]
         {
             if let Some(destination) = destination {
-                let hop = _routing_table.0[destination as usize][_rank as usize] as usize;
-                if destination == self_destination {
+                let hop = _routing_table.get_hop(destination, _rank) as usize;
+                if hop == 0 {
                     self.local_queue.push_back(packet);
-                } else if hop > 0 && hop < csr::DRTIOREP.len() {
-                    let repno = (hop - 1) as usize;
-                    self.downstream_queue.push_back((repno, packet));
+                } else if let Some(repno) = _routing_table.get_linkno(destination, _rank) {
+                    self.downstream_queue.push_back((repno as usize, packet));
                 } else {
                     self.upstream_queue.push_back(packet);
                 }
@@ -129,14 +128,10 @@ impl Router {
         {
             let destination = packet.routable_destination();
             if let Some(destination) = destination {
-                let hop = _routing_table.0[destination as usize][_rank as usize] as usize;
-                if !(hop > 0 && hop < csr::DRTIOREP.len()) {
-                    // higher rank can wait
-                    self.upstream_queue.push_back(packet);
+                if let Some(linkno) = _routing_table.get_linkno(destination, _rank) {
+                    self.downstream_queue.push_back((linkno as usize, packet));
                 } else {
-                    let repno = (hop - 1) as usize;
-                    // transaction will occur at closest possible opportunity
-                    self.downstream_queue.push_back((repno, packet));
+                    self.upstream_queue.push_back(packet);
                 }
                 Ok(())
             } else {

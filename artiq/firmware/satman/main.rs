@@ -111,9 +111,8 @@ pub fn cricon_read() -> RtioMaster {
 #[cfg(has_drtio_routing)]
 macro_rules! forward {
     ($router:expr, $routing_table:expr, $destination:expr, $rank:expr, $self_destination:expr, $repeaters:expr, $packet:expr) => {{
-        let hop = $routing_table.0[$destination as usize][$rank as usize];
-        if hop != 0 {
-            let repno = (hop - 1) as usize;
+        if let Some(repno) = $routing_table.get_linkno($destination, $rank) {
+            let repno = repno as usize;
             if repno < $repeaters.len() {
                 if $packet.expects_response() {
                     return $repeaters[repno].aux_forward($packet, $router, $routing_table, $rank, $self_destination);
@@ -159,7 +158,7 @@ fn process_aux_packet(dmamgr: &mut DmaManager, analyzer: &mut Analyzer, kernelmg
 
         drtioaux::Packet::DestinationStatusRequest { destination } => {
             #[cfg(has_drtio_routing)]
-            let hop = _routing_table.0[destination as usize][*rank as usize];
+            let hop = _routing_table.get_hop(destination, *rank);
             #[cfg(not(has_drtio_routing))]
             let hop = 0;
 
@@ -225,7 +224,7 @@ fn process_aux_packet(dmamgr: &mut DmaManager, analyzer: &mut Analyzer, kernelmg
 
         #[cfg(has_drtio_routing)]
         drtioaux::Packet::RoutingSetPath { destination, hops } => {
-            _routing_table.0[destination as usize] = hops;
+            _routing_table.set_hops(destination, hops);
             for rep in _repeaters.iter() {
                 if let Err(e) = rep.set_path(destination, &hops) {
                     error!("failed to set path ({})", e);
