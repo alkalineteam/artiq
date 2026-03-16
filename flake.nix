@@ -102,13 +102,13 @@
         (ncurses'.override {unicodeSupport = false;})
         zlib
         libuuid
-        xorg.libSM
-        xorg.libICE
-        xorg.libXrender
-        xorg.libX11
-        xorg.libXext
-        xorg.libXtst
-        xorg.libXi
+        libsm
+        libice
+        libxrender
+        libx11
+        libxext
+        libxtst
+        libxi
         freetype
         fontconfig
       ];
