@@ -2,13 +2,9 @@ import os, sys, tempfile, subprocess, io
 from functools import wraps
 from math import floor, ceil
 import numpy as np
-from scipy import special
-from scipy import linalg
 from numpy import int32, int64, uint32, uint64, float64, bool_, str_, ndarray
 from types import GenericAlias, ModuleType, SimpleNamespace
 from typing import _GenericAlias, Generic, Literal, TypeVar
-
-import nac3artiq
 
 from artiq.language.core import *
 from artiq.language.core import _ConstGenericMarker
@@ -35,149 +31,6 @@ def rtio_get_counter() -> int64:
 def test_exception_id_sync(id: int32):
     raise NotImplementedError("syscall not simulated")
 
-nac3_builtins = {
-    "int": int,
-    "float": float,
-    "bool": bool,
-    "str": str,
-    "list": list,
-    "tuple": tuple,
-    "Exception": Exception,
-    "range": range,
-    "enumerate": enumerate,
-    "round": round,
-    "round64": round64,
-    "floor": floor,
-    "floor64": floor64,
-    "ceil": ceil,
-    "ceil64": ceil64,
-    "len": len,
-    "min": min,
-    "max": max,
-    "abs": abs,
-    "some": Some,
-    "staticmethod": staticmethod,
-
-    "types": {
-        "GenericAlias": GenericAlias,
-        "ModuleType": ModuleType,
-    },
-
-    "typing": {
-        "_GenericAlias": _GenericAlias,
-        "Generic": Generic,
-        "TypeVar": TypeVar,
-        "Literal": Literal,
-    },
-
-    "numpy": {
-        "int32": int32,
-        "int64": int64,
-        "uint32": uint32,
-        "uint64": uint64,
-        "float64": float64,
-        "bool_": bool_,
-        "str_": str_,
-        "ndarray": ndarray,
-
-        "np_empty": np.empty,
-        "np_zeros": np.zeros,
-        "np_ones": np.ones,
-        "np_full": np.full,
-        "np_array": np.array,
-        "np_eye": np.eye,
-        "np_identity": np.identity,
-
-        "np_size": np.size,
-        "np_shape": np.shape,
-
-        "np_broadcast_to": np.broadcast_to,
-        "np_transpose": np.transpose,
-        "np_reshape": np.reshape,
-
-        "np_round": np.round,
-        "np_floor": np.floor,
-        "np_ceil": np.ceil,
-        "np_min": np.min,
-        "np_minimum": np.minimum,
-        "np_max": np.max,
-        "np_maximum": np.maximum,
-        "np_argmin": np.argmin,
-        "np_argmax": np.argmax,
-        "np_isnan": np.isnan,
-        "np_isinf": np.isinf,
-        "np_sin": np.sin,
-        "np_cos": np.cos,
-        "np_exp": np.exp,
-        "np_exp2": np.exp2,
-        "np_log": np.log,
-        "np_log10": np.log10,
-        "np_log2": np.log2,
-        "np_fabs": np.fabs,
-        "np_sqrt": np.sqrt,
-        "np_rint": np.rint,
-        "np_tan": np.tan,
-        "np_arcsin": np.arcsin,
-        "np_arccos": np.arccos,
-        "np_arctan": np.arctan,
-        "np_sinh": np.sinh,
-        "np_cosh": np.cosh,
-        "np_tanh": np.tanh,
-        "np_arcsinh": np.arcsinh,
-        "np_arccosh": np.arccosh,
-        "np_arctanh": np.arctanh,
-        "np_expm1": np.expm1,
-        "np_cbrt": np.cbrt,
-
-        "sp_spec_erf": special.erf,
-        "sp_spec_erfc": special.erfc,
-        "sp_spec_gamma": special.gamma,
-        "sp_spec_gammaln": special.gammaln,
-        "sp_spec_j0": special.j0,
-        "sp_spec_j1": special.j1,
-
-        "np_arctan2": np.arctan2,
-        "np_copysign": np.copysign,
-        "np_fmax": np.fmax,
-        "np_fmin": np.fmin,
-        "np_ldexp": np.ldexp,
-        "np_hypot": np.hypot,
-        "np_nextafter": np.nextafter,
-
-        "np_any": np.any,
-        "np_all": np.all,
-
-        "np_dot": np.dot,
-        "np_linalg_cholesky": np.linalg.cholesky,
-        "np_linalg_qr": np.linalg.qr,
-        "np_linalg_svd": np.linalg.svd,
-        "np_linalg_inv": np.linalg.inv,
-        "np_linalg_pinv": np.linalg.pinv,
-        "np_linalg_matrix_power": np.linalg.matrix_power,
-        "np_linalg_det": np.linalg.det,
-
-        "sp_linalg_lu": linalg.lu,
-        "sp_linalg_schur": linalg.schur,
-        "sp_linalg_hessenberg": linalg.hessenberg,
-    },
-
-    "artiq": {
-        "Auto": Auto,
-        "Kernel": Kernel,
-        "KernelInvariant": KernelInvariant,
-        "_ConstGenericMarker": _ConstGenericMarker,
-        "none": none,
-        "virtual": virtual,
-        "Option": Option,
-
-        # Decorator functions
-        "compile": compile,
-        "extern": extern,
-        "kernel": kernel,
-        "portable": portable,
-        "rpc": rpc,
-    },
-}
 
 @compile
 class Core:
@@ -210,6 +63,154 @@ class Core:
                  ref_multiplier=8,
                  target="rv32g", satellite_cpu_targets={},
                  report_invariants=False):
+        import nac3artiq
+        from scipy import special
+        from scipy import linalg
+
+        nac3_builtins = {
+            "int": int,
+            "float": float,
+            "bool": bool,
+            "str": str,
+            "list": list,
+            "tuple": tuple,
+            "Exception": Exception,
+            "range": range,
+            "enumerate": enumerate,
+            "round": round,
+            "round64": round64,
+            "floor": floor,
+            "floor64": floor64,
+            "ceil": ceil,
+            "ceil64": ceil64,
+            "len": len,
+            "min": min,
+            "max": max,
+            "abs": abs,
+            "some": Some,
+            "staticmethod": staticmethod,
+
+            "types": {
+                "GenericAlias": GenericAlias,
+                "ModuleType": ModuleType,
+            },
+
+            "typing": {
+                "_GenericAlias": _GenericAlias,
+                "Generic": Generic,
+                "TypeVar": TypeVar,
+                "Literal": Literal,
+            },
+
+            "numpy": {
+                "int32": int32,
+                "int64": int64,
+                "uint32": uint32,
+                "uint64": uint64,
+                "float64": float64,
+                "bool_": bool_,
+                "str_": str_,
+                "ndarray": ndarray,
+
+                "np_empty": np.empty,
+                "np_zeros": np.zeros,
+                "np_ones": np.ones,
+                "np_full": np.full,
+                "np_array": np.array,
+                "np_eye": np.eye,
+                "np_identity": np.identity,
+
+                "np_size": np.size,
+                "np_shape": np.shape,
+
+                "np_broadcast_to": np.broadcast_to,
+                "np_transpose": np.transpose,
+                "np_reshape": np.reshape,
+
+                "np_round": np.round,
+                "np_floor": np.floor,
+                "np_ceil": np.ceil,
+                "np_min": np.min,
+                "np_minimum": np.minimum,
+                "np_max": np.max,
+                "np_maximum": np.maximum,
+                "np_argmin": np.argmin,
+                "np_argmax": np.argmax,
+                "np_isnan": np.isnan,
+                "np_isinf": np.isinf,
+                "np_sin": np.sin,
+                "np_cos": np.cos,
+                "np_exp": np.exp,
+                "np_exp2": np.exp2,
+                "np_log": np.log,
+                "np_log10": np.log10,
+                "np_log2": np.log2,
+                "np_fabs": np.fabs,
+                "np_sqrt": np.sqrt,
+                "np_rint": np.rint,
+                "np_tan": np.tan,
+                "np_arcsin": np.arcsin,
+                "np_arccos": np.arccos,
+                "np_arctan": np.arctan,
+                "np_sinh": np.sinh,
+                "np_cosh": np.cosh,
+                "np_tanh": np.tanh,
+                "np_arcsinh": np.arcsinh,
+                "np_arccosh": np.arccosh,
+                "np_arctanh": np.arctanh,
+                "np_expm1": np.expm1,
+                "np_cbrt": np.cbrt,
+
+                "sp_spec_erf": special.erf,
+                "sp_spec_erfc": special.erfc,
+                "sp_spec_gamma": special.gamma,
+                "sp_spec_gammaln": special.gammaln,
+                "sp_spec_j0": special.j0,
+                "sp_spec_j1": special.j1,
+
+                "np_arctan2": np.arctan2,
+                "np_copysign": np.copysign,
+                "np_fmax": np.fmax,
+                "np_fmin": np.fmin,
+                "np_ldexp": np.ldexp,
+                "np_hypot": np.hypot,
+                "np_nextafter": np.nextafter,
+
+                "np_any": np.any,
+                "np_all": np.all,
+
+                "np_dot": np.dot,
+                "np_linalg_cholesky": np.linalg.cholesky,
+                "np_linalg_qr": np.linalg.qr,
+                "np_linalg_svd": np.linalg.svd,
+                "np_linalg_inv": np.linalg.inv,
+                "np_linalg_pinv": np.linalg.pinv,
+                "np_linalg_matrix_power": np.linalg.matrix_power,
+                "np_linalg_det": np.linalg.det,
+
+                "sp_linalg_lu": linalg.lu,
+                "sp_linalg_schur": linalg.schur,
+                "sp_linalg_hessenberg": linalg.hessenberg,
+            },
+
+            "artiq": {
+                "Auto": Auto,
+                "Kernel": Kernel,
+                "KernelInvariant": KernelInvariant,
+                "_ConstGenericMarker": _ConstGenericMarker,
+                "none": none,
+                "virtual": virtual,
+                "Option": Option,
+
+                # Decorator functions
+                "compile": compile,
+                "extern": extern,
+                "kernel": kernel,
+                "portable": portable,
+                "rpc": rpc,
+            },
+        }
+
         self.ref_period = ref_period
         self.ref_multiplier = ref_multiplier
         
