@@ -417,11 +417,6 @@
       };
     };
 
-    packages.x86_64-w64-mingw32 = import ./windows {
-      inherit sipyco nac3 artiq-comtools;
-      artiq = self;
-    };
-
     inherit qtPaths makeArtiqBoardPackage openocd-bscanspi-f;
 
     defaultPackage.x86_64-linux = packages.x86_64-linux.python3-mimalloc.withPackages (_: [packages.x86_64-linux.artiq]);
@@ -500,10 +495,6 @@
 
     hydraJobs = {
       inherit (packages.x86_64-linux) artiq artiq-board-kc705-nist_clock artiq-board-efc-shuttler artiq-board-efc-songbird artiq-board-phaser-mtdds openocd-bscanspi;
-      sipyco-msys2-pkg = packages.x86_64-w64-mingw32.sipyco-pkg;
-      artiq-comtools-msys2-pkg = packages.x86_64-w64-mingw32.artiq-comtools-pkg;
-      artiq-msys2-pkg = packages.x86_64-w64-mingw32.artiq-pkg;
-      msys2-repos = packages.x86_64-w64-mingw32.msys2-repos;
       inherit (packages.x86_64-linux) artiq-manual-html artiq-manual-pdf;
       gateware-sim = pkgs.stdenvNoCC.mkDerivation {
         name = "gateware-sim";
