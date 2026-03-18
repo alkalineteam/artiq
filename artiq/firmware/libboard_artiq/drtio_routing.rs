@@ -10,47 +10,79 @@ pub const DEST_COUNT: usize = 0;
 pub const MAX_HOPS: usize = 32;
 pub const INVALID_HOP: u8 = 0xff;
 
-pub struct RoutingTable(pub [[u8; MAX_HOPS]; DEST_COUNT]);
+pub struct RoutingTable {
+    table: [[u8; MAX_HOPS]; DEST_COUNT],
+    master_destination: u8,
+}
 
 impl RoutingTable {
     // default routing table is for star topology with no repeaters
-    pub fn default_master(default_n_links: usize) -> RoutingTable {
-        let mut ret = RoutingTable([[INVALID_HOP; MAX_HOPS]; DEST_COUNT]);
+    fn default_master(default_n_links: usize) -> RoutingTable {
+        let mut ret = RoutingTable {
+            table: [[INVALID_HOP; MAX_HOPS]; DEST_COUNT],
+            master_destination: 0,
+        };
         let n_entries = default_n_links + 1;  // include local RTIO
         for i in 0..n_entries {
-            ret.0[i][0] = i as u8;
+            ret.table[i][0] = i as u8;
         }
         for i in 1..n_entries {
-            ret.0[i][1] = 0x00;
+            ret.table[i][1] = 0x00;
         }
+        ret
+    }
+
+    pub fn from_config(default_n_links: usize) -> RoutingTable {
+        let mut ret = RoutingTable::default_master(default_n_links);
+        let ok = config::read("routing_table", |result| {
+            if let Ok(data) = result {
+                if data.len() == DEST_COUNT*MAX_HOPS {
+                    for i in 0..DEST_COUNT {
+                        for j in 0..MAX_HOPS {
+                            ret.table[i][j] = data[i*MAX_HOPS+j];
+                        }
+                    }
+                    return true;
+                } else {
+                    warn!("length of the configured routing table is incorrect");
+                }
+            }
+            false
+        });
+        if !ok {
+            info!("could not read routing table from configuration, using default");
+        }
+        ret.determine_master_destination();
+        info!("routing table: {}", ret);
         ret
     }
 
     // use this by default on satellite, as they receive
     // the routing table from the master
     pub fn default_empty() -> RoutingTable {
-        RoutingTable([[INVALID_HOP; MAX_HOPS]; DEST_COUNT])
+        RoutingTable {
+            table: [[INVALID_HOP; MAX_HOPS]; DEST_COUNT],
+            master_destination: 0,
+        }
     }
 
-    // find your own destination number
-    // by finding the destination with 0 hop
-    pub fn get_self_destination(&self, rank: u8) -> u8 {
+    // find the master's destination number
+    // by finding the destination with 0 hop at 0 rank
+    fn determine_master_destination(&mut self) {
         for i in 0..DEST_COUNT {
-            if self.0[i][rank as usize] == 0 {
-                return i as u8;
+            if self.table[i][0] == 0 {
+                self.master_destination = i as u8;
             }
         }
-        0
     }
 
-    // find the master destination
     pub fn get_master_destination(&self) -> u8 {
-        self.get_self_destination(0)
+        self.master_destination
     }
 
     // get the next hop
     pub fn get_hop(&self, destination: u8, rank: u8) -> u8 {
-        self.0[destination as usize][rank as usize]
+        self.table[destination as usize][rank as usize]
     }
 
     // get the link number
@@ -59,7 +91,7 @@ impl RoutingTable {
     pub fn get_linkno(&self, _destination: u8, _rank: u8) -> Option<u8> {
         #[cfg(has_drtio_routing)]
         {
-            let hop = self.0[_destination as usize][_rank as usize];
+            let hop = self.table[_destination as usize][_rank as usize];
             #[cfg(has_drtiorep0)]
             let drtio_len = csr::DRTIOREP.len();
             #[cfg(not(has_drtiorep0))]
@@ -77,11 +109,15 @@ impl RoutingTable {
     }
 
     pub fn set_hops(&mut self, destination: u8, hops: [u8; MAX_HOPS]) {
-        self.0[destination as usize] = hops;
+        self.table[destination as usize] = hops;
+        // update the master destination if applicable
+        if self.table[destination as usize][0] == 0 {
+            self.master_destination = destination;
+        }
     }
 
     pub fn get_hops(&self, destination: usize) -> [u8; MAX_HOPS] {
-        self.0[destination]
+        self.table[destination]
     }
 }
 
@@ -89,13 +125,13 @@ impl fmt::Display for RoutingTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "RoutingTable {{")?;
         for i in 0..DEST_COUNT {
-            if self.0[i][0] != INVALID_HOP {
+            if self.table[i][0] != INVALID_HOP {
                 write!(f, " {}:", i)?;
                 for j in 0..MAX_HOPS {
-                    if self.0[i][j] == INVALID_HOP {
+                    if self.table[i][j] == INVALID_HOP {
                         break;
                     }
-                    write!(f, " {}", self.0[i][j])?;
+                    write!(f, " {}", self.table[i][j])?;
                 }
                 write!(f, ";")?;
             }
@@ -103,30 +139,6 @@ impl fmt::Display for RoutingTable {
         write!(f, " }}")?;
         Ok(())
     }
-}
-
-pub fn config_routing_table(default_n_links: usize) -> RoutingTable {
-    let mut ret = RoutingTable::default_master(default_n_links);
-    let ok = config::read("routing_table", |result| {
-        if let Ok(data) = result {
-            if data.len() == DEST_COUNT*MAX_HOPS {
-                for i in 0..DEST_COUNT {
-                    for j in 0..MAX_HOPS {
-                        ret.0[i][j] = data[i*MAX_HOPS+j];
-                    }
-                }
-                return true;
-            } else {
-                warn!("length of the configured routing table is incorrect");
-            }
-        }
-        false
-    });
-    if !ok {
-        info!("could not read routing table from configuration, using default");
-    }
-    info!("routing table: {}", ret);
-    ret
 }
 
 #[cfg(has_drtio_routing)]

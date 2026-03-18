@@ -28,8 +28,6 @@ pub mod drtio {
     #[cfg(has_drtio_eem)]
     const DRTIO_EEM_LINKNOS: core::ops::Range<usize> = (csr::DRTIO.len()-csr::CONFIG_EEM_DRTIO_COUNT as usize)..csr::DRTIO.len();
 
-    static mut MASTER_DESTINATION: u8 = 0;
-
     #[derive(Fail, Debug)]
     pub enum Error {
         #[fail(display = "timed out")]
@@ -67,9 +65,6 @@ pub mod drtio {
             up_destinations: &Urc<RefCell<[bool; drtio_routing::DEST_COUNT]>>,
             ddma_mutex: &Mutex, subkernel_mutex: &Mutex) {
 
-        unsafe {
-            MASTER_DESTINATION = routing_table.borrow().get_master_destination();
-        }
         let aux_mutex = aux_mutex.clone();
         let routing_table = routing_table.clone();
         let up_destinations = up_destinations.clone();
@@ -123,15 +118,15 @@ pub mod drtio {
     ) -> bool {
         match packet {
             // packets to be consumed locally
-            drtioaux::Packet::DmaPlaybackStatus { id, source, destination, error, channel, timestamp } if unsafe { *destination == MASTER_DESTINATION } => {
+            drtioaux::Packet::DmaPlaybackStatus { id, source, destination, error, channel, timestamp } if *destination == routing_table.get_master_destination() => {
                 remote_dma::playback_done(io, ddma_mutex, *id, *source, *error, *channel, *timestamp);
                 true
             },
-            drtioaux::Packet::SubkernelFinished { id, destination, with_exception, exception_src } if unsafe { *destination == MASTER_DESTINATION } => {
+            drtioaux::Packet::SubkernelFinished { id, destination, with_exception, exception_src } if *destination == routing_table.get_master_destination() => {
                 subkernel::subkernel_finished(io, subkernel_mutex, *id, *with_exception, *exception_src);
                 true
             },
-            drtioaux::Packet::SubkernelMessage { id, source: from, destination, status, length, data } if unsafe { *destination == MASTER_DESTINATION } => {
+            drtioaux::Packet::SubkernelMessage { id, source: from, destination, status, length, data } if *destination == routing_table.get_master_destination() => {
                 subkernel::message_handle_incoming(io, subkernel_mutex, *id, *status, *length as usize, data);
                 // acknowledge receiving part of the message
                 drtioaux::send(linkno, 
@@ -541,10 +536,10 @@ pub mod drtio {
         partition_data(trace, |slice, status, len: usize| {
             let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                 &drtioaux::Packet::DmaAddTraceRequest {
-                    id: id, source: unsafe { MASTER_DESTINATION }, destination: destination, status: status, length: len as u16, trace: *slice})?;
+                    id: id, source: routing_table.get_master_destination(), destination: destination, status: status, length: len as u16, trace: *slice})?;
             match reply {
-                drtioaux::Packet::DmaAddTraceReply { destination, succeeded: true, .. } if unsafe { destination == MASTER_DESTINATION } => Ok(()),
-                drtioaux::Packet::DmaAddTraceReply { destination, succeeded: false, .. } if unsafe { destination == MASTER_DESTINATION } => Err(Error::DmaAddTraceFail(destination)),
+                drtioaux::Packet::DmaAddTraceReply { destination, succeeded: true, .. } if destination == routing_table.get_master_destination() => Ok(()),
+                drtioaux::Packet::DmaAddTraceReply { destination, succeeded: false, .. } if destination == routing_table.get_master_destination() => Err(Error::DmaAddTraceFail(destination)),
                 packet => Err(Error::UnexpectedPacket(packet)),
             }
         })
@@ -554,10 +549,10 @@ pub mod drtio {
             routing_table: &drtio_routing::RoutingTable, id: u32, destination: u8) -> Result<(), Error> {
         let linkno = routing_table.get_linkno(destination, 0).unwrap();
         let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
-            &drtioaux::Packet::DmaRemoveTraceRequest { id: id, source: unsafe { MASTER_DESTINATION }, destination: destination })?;
+            &drtioaux::Packet::DmaRemoveTraceRequest { id: id, source: routing_table.get_master_destination(), destination: destination })?;
         match reply {
-            drtioaux::Packet::DmaRemoveTraceReply { destination, succeeded: true } if unsafe { destination == MASTER_DESTINATION } => Ok(()),
-            drtioaux::Packet::DmaRemoveTraceReply { destination, succeeded: false } if unsafe { destination == MASTER_DESTINATION } => Err(Error::DmaEraseFail(destination)),
+            drtioaux::Packet::DmaRemoveTraceReply { destination, succeeded: true } if destination == routing_table.get_master_destination() => Ok(()),
+            drtioaux::Packet::DmaRemoveTraceReply { destination, succeeded: false } if destination == routing_table.get_master_destination() => Err(Error::DmaEraseFail(destination)),
             packet => Err(Error::UnexpectedPacket(packet)),
         }
     }
@@ -566,10 +561,10 @@ pub mod drtio {
             routing_table: &drtio_routing::RoutingTable, id: u32, destination: u8, timestamp: u64) -> Result<(), Error> {
         let linkno = routing_table.get_linkno(destination, 0).unwrap();
         let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
-            &drtioaux::Packet::DmaPlaybackRequest{ id: id, source: unsafe { MASTER_DESTINATION }, destination: destination, timestamp: timestamp })?;
+            &drtioaux::Packet::DmaPlaybackRequest{ id: id, source: routing_table.get_master_destination(), destination: destination, timestamp: timestamp })?;
         match reply {
-            drtioaux::Packet::DmaPlaybackReply { destination, succeeded: true } if unsafe { destination == MASTER_DESTINATION } => Ok(()),
-            drtioaux::Packet::DmaPlaybackReply { destination, succeeded: false } if unsafe { destination == MASTER_DESTINATION } =>
+            drtioaux::Packet::DmaPlaybackReply { destination, succeeded: true } if destination == routing_table.get_master_destination() => Ok(()),
+            drtioaux::Packet::DmaPlaybackReply { destination, succeeded: false } if destination == routing_table.get_master_destination() =>
                     Err(Error::DmaPlaybackFail(destination)),
             packet => Err(Error::UnexpectedPacket(packet)),
         }
@@ -646,12 +641,12 @@ pub mod drtio {
         let linkno = routing_table.get_linkno(destination, 0).unwrap();
         let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
             &drtioaux::Packet::SubkernelLoadRunRequest{ 
-                id: id, source: unsafe { MASTER_DESTINATION }, destination: destination,
+                id: id, source: routing_table.get_master_destination(), destination: destination,
                 run: run, timestamp: timestamp
             })?;
         match reply {
-            drtioaux::Packet::SubkernelLoadRunReply { destination, succeeded: true } if unsafe { destination == MASTER_DESTINATION } => Ok(()),
-            drtioaux::Packet::SubkernelLoadRunReply { destination, succeeded: false } if unsafe { destination == MASTER_DESTINATION } =>
+            drtioaux::Packet::SubkernelLoadRunReply { destination, succeeded: true } if destination == routing_table.get_master_destination() => Ok(()),
+            drtioaux::Packet::SubkernelLoadRunReply { destination, succeeded: false } if destination == routing_table.get_master_destination() =>
                     Err(Error::SubkernelRunFail(destination)),
                 packet => Err(Error::UnexpectedPacket(packet)),
         }
@@ -664,9 +659,9 @@ pub mod drtio {
         let mut remote_data: Vec<u8> = Vec::new();
         loop {
             let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
-                &drtioaux::Packet::SubkernelExceptionRequest { source: unsafe { MASTER_DESTINATION }, destination: destination })?;
+                &drtioaux::Packet::SubkernelExceptionRequest { source: routing_table.get_master_destination(), destination: destination })?;
             match reply {
-                drtioaux::Packet::SubkernelException { destination, last, length, data } if unsafe { destination == MASTER_DESTINATION } => { 
+                drtioaux::Packet::SubkernelException { destination, last, length, data } if destination == routing_table.get_master_destination() => { 
                     remote_data.extend(&data[0..length as usize]);
                     if last {
                         return Ok(remote_data);
@@ -684,7 +679,7 @@ pub mod drtio {
         partition_data(message, |slice, status, len: usize| {
             let reply = aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno, 
                 &drtioaux::Packet::SubkernelMessage {
-                    source: unsafe { MASTER_DESTINATION }, destination: destination,
+                    source: routing_table.get_master_destination(), destination: destination,
                     id: id, status: status, length: len as u16, data: *slice})?;
             match reply {
                 drtioaux::Packet::SubkernelMessageAck { .. } => Ok(()),

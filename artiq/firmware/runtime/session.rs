@@ -922,7 +922,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 let mut reply = kern::GrabberUartReadReply { succeeded: false, data: 0};
 
                 #[cfg(has_drtio)]
-                let hop = routing_table.0[_destination as usize][0];
+                let hop = routing_table.get_hop(_destination, 0);
 
                 #[cfg(not(has_drtio))]
                 let hop = 0;
@@ -959,7 +959,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 let mut reply = kern::GrabberUartWriteReply { succeeded: false };
 
                 #[cfg(has_drtio)]
-                let hop = routing_table.0[_destination as usize][0];
+                let hop = routing_table.get_hop(_destination, 0);
 
                 #[cfg(not(has_drtio))]
                 let hop = 0;

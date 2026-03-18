@@ -195,7 +195,7 @@ fn startup() {
 
     #[cfg(has_drtio)]
     let drtio_routing_table = urc::Urc::new(RefCell::new(
-        drtio_routing::config_routing_table(csr::DRTIO.len())));
+        drtio_routing::RoutingTable::from_config(csr::DRTIO.len())));
     #[cfg(not(has_drtio))]
     let drtio_routing_table = urc::Urc::new(RefCell::new(
         drtio_routing::RoutingTable::default_empty()));

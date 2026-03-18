@@ -766,7 +766,7 @@ impl Manager {
                 }
                 &kern::DmaRecordStop { duration, enable_ddma: _ } => {
                     // ddma is always used on satellites
-                    if let Ok(id) = dma_manager.record_stop(duration, destination, self.session.source) {
+                    if let Ok(id) = dma_manager.record_stop(duration, destination, routing_table.get_master_destination()) {
                         let remote_count = dma_manager.upload_traces(id, router, rank, destination, routing_table)?;
                         if remote_count > 0 {
                             let max_time = clock::get_ms() + 10_000 as u64;

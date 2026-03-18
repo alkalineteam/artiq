@@ -1,7 +1,5 @@
 use alloc::{vec::Vec, collections::vec_deque::VecDeque};
 use board_artiq::{drtioaux, drtio_routing};
-#[cfg(has_drtio_routing)]
-use board_misoc::csr;
 use core::cmp::min;
 use proto_artiq::drtioaux_proto::PayloadStatus;
 use SAT_PAYLOAD_MAX_SIZE;
@@ -91,7 +89,7 @@ impl Router {
     // messages are always buffered for both upstream and downstream
     pub fn route(&mut self, packet: drtioaux::Packet,
         _routing_table: &drtio_routing::RoutingTable, _rank: u8,
-        self_destination: u8
+        _self_destination: u8
     ) {
         let destination = packet.routable_destination();
         #[cfg(has_drtio_routing)]
@@ -111,7 +109,7 @@ impl Router {
         }
         #[cfg(not(has_drtio_routing))]
         {
-            if destination == Some(self_destination) {
+            if destination == Some(_self_destination) {
                 self.local_queue.push_back(packet);
             } else {
                 self.upstream_queue.push_back(packet);
