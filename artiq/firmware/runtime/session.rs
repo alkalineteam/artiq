@@ -918,14 +918,20 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 }
 
             #[cfg(any(has_grabber, has_drtio))]
-            &kern::GrabberUartReadRequest { destination, g } => {
+            &kern::GrabberUartReadRequest { destination: _destination, g } => {
                 let mut reply = kern::GrabberUartReadReply { succeeded: false, data: 0};
-                let hop = routing_table.0[destination as usize][0];
+
+                #[cfg(has_drtio)]
+                let hop = routing_table.0[_destination as usize][0];
+
+                #[cfg(not(has_drtio))]
+                let hop = 0;
+
                 #[cfg(has_drtio)]
                 if hop != 0 {
                     let linkno = hop - 1;
                     let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
-                        &Packet::GrabberUartReadRequest { destination, g }
+                        &Packet::GrabberUartReadRequest { destination: _destination, g }
                     );
                     match drtioaux_packet {
                         Ok(Packet::GrabberUartReadReply { succeeded, data }) => {
@@ -949,14 +955,20 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
             }
 
             #[cfg(any(has_grabber, has_drtio))]
-            &kern::GrabberUartWriteRequest { destination, g, data } => {
+            &kern::GrabberUartWriteRequest { destination: _destination, g, data } => {
                 let mut reply = kern::GrabberUartWriteReply { succeeded: false };
-                let hop = routing_table.0[destination as usize][0];
+
+                #[cfg(has_drtio)]
+                let hop = routing_table.0[_destination as usize][0];
+
+                #[cfg(not(has_drtio))]
+                let hop = 0;
+
                 #[cfg(has_drtio)]
                 if hop != 0 {
                     let linkno = hop - 1;
                     let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
-                        &Packet::GrabberUartWriteRequest { destination, g, data }
+                        &Packet::GrabberUartWriteRequest { destination: _destination, g, data }
                     );
                     match drtioaux_packet {
                         Ok(Packet::GrabberUartWriteReply { succeeded }) => {
