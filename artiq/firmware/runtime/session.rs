@@ -805,7 +805,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                         }
                         Ok(packet) => {
                             error!("received unexpected aux packet {:?}", packet);
-                            break kern_send(io, &kern::CXPError("recevied unexpected drtio aux reply"));
+                            break kern_send(io, &kern::CXPError("received unexpected drtio aux reply"));
                         }
                         Err(e) => {
                             error!("aux packet error ({})", e);
@@ -839,7 +839,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                         }
                         Ok(packet) => {
                             error!("received unexpected aux packet {:?}", packet);
-                            break kern_send(io, &kern::CXPError("recevied unexpected drtio aux reply"));
+                            break kern_send(io, &kern::CXPError("received unexpected drtio aux reply"));
                         }
                         Err(e) => {
                             error!("aux packet error ({})", e);
@@ -871,7 +871,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                     Ok(Packet::CXPROIViewerSetupReply) => kern::CXPROIViewerSetupReply,
                     Ok(packet) => {
                         error!("received unexpected aux packet {:?}", packet);
-                        kern::CXPError("recevied unexpected drtio aux reply")
+                        kern::CXPError("received unexpected drtio aux reply")
                     }
                     Err(e) => {
                         error!("aux packet error ({})", e);
@@ -906,7 +906,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                         }
                         Ok(packet) => {
                             error!("received unexpected aux packet {:?}", packet);
-                            break kern::CXPError("recevied unexpected drtio aux reply");
+                            break kern::CXPError("received unexpected drtio aux reply");
                         }
                         Err(e) => {
                             error!("aux packet error ({})", e);
