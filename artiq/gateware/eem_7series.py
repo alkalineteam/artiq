@@ -8,16 +8,29 @@ def peripheral_dio(module, peripheral, **kwargs):
         "output": ttl_serdes_7series.Output_8X,
         "clkgen": ttl_simple.ClockGen
     }
-    if len(peripheral["ports"]) != 1:
-        raise ValueError("wrong number of ports")
     if peripheral["edge_counter"]:
         edge_counter_cls = edge_counter.SimpleEdgeCounter
     else:
         edge_counter_cls = None
-    eem.DIO.add_std(module, peripheral["ports"][0],
-        ttl_classes[peripheral["bank_direction_low"]],
-        ttl_classes[peripheral["bank_direction_high"]],
-        edge_counter_cls=edge_counter_cls, **kwargs)
+    has_second_port = len(peripheral["ports"]) == 2
+    if peripheral.get("board", "") != "RJ45_LVDS":
+        if has_second_port:
+            raise ValueError("wrong number of ports")
+        eem.DIO.add_std(module,
+                        peripheral["ports"][0],
+                        ttl_classes[peripheral["bank_direction_low"]],
+                        ttl_classes[peripheral["bank_direction_high"]],
+                        edge_counter_cls = edge_counter_cls,
+                        **kwargs)
+    else:
+        dio_directions = peripheral["ch_direction_0_3"] + peripheral["ch_direction_4_7"] + peripheral.get("ch_direction_8_11", []) + peripheral.get("ch_direction_12_15", [])
+        dio_cls_list = [ttl_classes[name] for name in dio_directions]
+        eem.DIO.add_rj45_lvds(module,
+                              peripheral["ports"][0],
+                              peripheral["ports"][1] if has_second_port else None,
+                              dio_cls_list,
+                              edge_counter_cls = edge_counter_cls,
+                              **kwargs)
 
 
 def peripheral_dio_spi(module, peripheral, **kwargs):

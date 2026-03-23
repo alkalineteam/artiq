@@ -156,36 +156,43 @@ class PeripheralManager:
             "output": "TTLOut",
             "clkgen": "TTLClockGen"
         }
-        classes = [
-            class_names[peripheral["bank_direction_low"]],
-            class_names[peripheral["bank_direction_high"]]
-        ]
+        dios = []
+        if peripheral.get("board", "") != "RJ45_LVDS":
+            for i in range(num_channels):
+                classes = [
+                    class_names[peripheral["bank_direction_low"]],
+                    class_names[peripheral["bank_direction_high"]]
+                ]
+                dios.append((self.get_name("ttl"), classes[i // 4]))
+        else:
+            ch_directions = peripheral["ch_direction_0_3"] + peripheral["ch_direction_4_7"] + peripheral.get("ch_direction_8_11", []) + peripheral.get("ch_direction_12_15", [])
+            for ch_direction in ch_directions:
+                dios.append((self.get_name("ttl"), class_names[ch_direction]))
         channel = count(0)
-        name = [self.get_name("ttl") for _ in range(num_channels)]
-        for i in range(num_channels):
+        for name, class_name in dios:
             self.gen("""
                 device_db["{name}"] = {{
                     "type": "local",
                     "module": "artiq.coredevice.ttl",
                     "class": "{class_name}",
-                    "arguments": {{"channel": 0x{channel:06x}}},
+                    "arguments": {{"channel": 0x{channel:06x}}}
                 }}""",
-                     name=name[i],
-                     class_name=classes[i // 4],
-                     channel=rtio_offset + next(channel))
+                name=name,
+                class_name=class_name,
+                channel=rtio_offset + next(channel))
         if peripheral["edge_counter"]:
-            for i in range(num_channels):
-                class_name = classes[i // 4]
+            for name, class_name in dios:
                 if class_name == "TTLInOut":
                     self.gen("""
                         device_db["{name}_counter"] = {{
                             "type": "local",
                             "module": "artiq.coredevice.edge_counter",
                             "class": "EdgeCounter",
-                            "arguments": {{"channel": 0x{channel:06x}}},
+                            "arguments": {{"channel": 0x{channel:06x}}}
                         }}""",
-                             name=name[i],
-                             channel=rtio_offset + next(channel))
+                        name=name,
+                        class_name=class_name,
+                        channel=rtio_offset + next(channel))
         return next(channel)
 
     def process_dio_spi(self, rtio_offset, peripheral):

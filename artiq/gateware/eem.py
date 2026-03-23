@@ -40,17 +40,25 @@ class _EEM:
 
 class DIO(_EEM):
     @staticmethod
-    def io(eem, iostandard):
-        return [("dio{}".format(eem), i,
-            Subsignal("p", Pins(_eem_pin(eem, i, "p"))),
-            Subsignal("n", Pins(_eem_pin(eem, i, "n"))),
-            iostandard(eem))
-            for i in range(8)]
+    def io(eem0, eem1, iostandard):
+        signals = []
+        for i in range(8):
+            signals.append(("dio{}".format(eem0), i,
+                    Subsignal("p", Pins(_eem_pin(eem0, i, "p"))),
+                    Subsignal("n", Pins(_eem_pin(eem0, i, "n"))),
+                    iostandard(eem0)))
+        if eem1 is not None:
+            for i in range(8):
+                signals.append(("dio{}".format(eem0), i+8,
+                        Subsignal("p", Pins(_eem_pin(eem1, i, "p"))),
+                        Subsignal("n", Pins(_eem_pin(eem1, i, "n"))),
+                        iostandard(eem0)))
+        return signals
 
     @classmethod
     def add_std(cls, target, eem, ttl03_cls, ttl47_cls, iostandard=default_iostandard,
             edge_counter_cls=None):
-        cls.add_extension(target, eem, iostandard=iostandard)
+        cls.add_extension(target, eem, None, iostandard=iostandard)
 
         phys = []
         dci = iostandard(eem).name == "LVDS"
@@ -63,6 +71,28 @@ class DIO(_EEM):
         for i in range(4):
             pads = target.platform.request("dio{}".format(eem), 4+i)
             phy = ttl47_cls(pads.p, pads.n, dci=dci)
+            phys.append(phy)
+            target.submodules += phy
+            target.rtio_channels.append(rtio.Channel.from_phy(phy))
+
+        if edge_counter_cls is not None:
+            for phy in phys:
+                state = getattr(phy, "input_state", None)
+                if state is not None:
+                    counter = edge_counter_cls(state)
+                    target.submodules += counter
+                    target.rtio_channels.append(rtio.Channel.from_phy(counter))
+
+    @classmethod
+    def add_rj45_lvds(cls, target, eem0, eem1, dio_cls_list, iostandard=default_iostandard,
+                       edge_counter_cls=None):
+        cls.add_extension(target, eem0, eem1, iostandard=iostandard)
+
+        phys = []
+        dci = iostandard(eem0).name == "LVDS"
+        for i, (dio_cls) in enumerate(dio_cls_list):
+            pads = target.platform.request("dio{}".format(eem0), i)
+            phy = dio_cls(pads.p, pads.n, dci=dci)
             phys.append(phy)
             target.submodules += phy
             target.rtio_channels.append(rtio.Channel.from_phy(phy))

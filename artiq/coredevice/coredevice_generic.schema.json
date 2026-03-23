@@ -177,29 +177,104 @@
                     }
                 },
                 "then": {
-                    "properties": {
-                        "ports": {
-                            "type": "array",
-                            "items": {
-                                "type": "integer"
+                    "if": {
+                        "properties": {
+                            "board": {
+                                "const": "RJ45_LVDS"
+                            }
+                        },
+                        "required": ["board"]
+                    },
+                    "then": {
+                        "properties": {
+                            "ports": {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer"
+                                },
+                                "minItems": 1,
+                                "maxItems": 2
                             },
-                            "minItems": 1,
-                            "maxItems": 1
+                            "edge_counter": {
+                                "type": "boolean",
+                                "default": false
+                            },
+                            "ch_direction_0_3": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": ["input", "output", "clkgen"]
+                                },
+                                "minItems": 4,
+                                "maxItems": 4
+                            },
+                            "ch_direction_4_7": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": ["input", "output", "clkgen"]
+                                },
+                                "minItems": 4,
+                                "maxItems": 4
+                            }
                         },
-                        "edge_counter": {
-                            "type": "boolean",
-                            "default": false
+                        "required": ["ports", "ch_direction_0_3", "ch_direction_4_7"],
+                        "if": {
+                            "properties": {
+                                "ports": {
+                                    "minItems": 2
+                                }
+                            }
                         },
-                        "bank_direction_low": {
-                            "type": "string",
-                            "enum": ["input", "output", "clkgen"]
-                        },
-                        "bank_direction_high": {
-                            "type": "string",
-                            "enum": ["input", "output", "clkgen"]
+                        "then": {
+                            "properties": {
+                                "ch_direction_8_11": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "enum": ["input", "output", "clkgen"]
+                                    },
+                                    "minItems": 4,
+                                    "maxItems": 4
+                                },
+                                "ch_direction_12_15": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "enum": ["input", "output", "clkgen"]
+                                    },
+                                    "minItems": 4,
+                                    "maxItems": 4
+                                }
+                            },
+                            "required": ["ch_direction_8_11", "ch_direction_12_15"]
                         }
                     },
-                    "required": ["ports", "bank_direction_low", "bank_direction_high"]
+                    "else": {
+                        "properties": {
+                            "ports": {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer"
+                                },
+                                "minItems": 1,
+                                "maxItems": 1
+                            },
+                            "edge_counter":{
+                                "type": "boolean",
+                                "default": false
+                            },
+                            "bank_direction_low": {
+                                "type": "string",
+                                "enum": ["input", "output", "clkgen"]
+                            },
+                            "bank_direction_high": {
+                                "type": "string",
+                                "enum": ["input", "output", "clkgen"]
+                            }
+                        },
+                        "required": ["ports", "bank_direction_low", "bank_direction_high"]
+                    }
                 }
             }, {
                 "title": "DIO_SPI",
