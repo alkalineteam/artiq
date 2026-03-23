@@ -98,7 +98,7 @@ To spawn a shell in this environment, navigate to the directory containing the `
 
 The resulting shell will have access to ARTIQ as well as any additional packages you may have added. You can exit this shell at any time with CTRL+D or with the command ``exit``. Note that a first execution of ``nix shell`` on a given flake may take some time; repetitions of the same command will use stored versions of packages and run much more quickly.
 
-You might be interested in creating multiple directories containing separate ``flake.nix`` files to represent different sets of packages for different purposes. If you are familiar with Conda, using Nix in this way is similar to having multiple Conda environments.
+You might be interested in creating multiple directories containing separate ``flake.nix`` files to represent different sets of packages for different purposes.
 
 To find more packages you can browse the `Nix package search <https://search.nixos.org/packages>`_ website. If your favorite package is not available with Nix, contact M-Labs using the helpdesk@ email.
 
