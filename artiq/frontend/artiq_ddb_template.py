@@ -205,14 +205,15 @@ class PeripheralManager:
                             "class": "SPIMaster",
                             "arguments": {{"channel": 0x{channel:06x}}}
                         }}""",
-                     name=self.get_name(spi["name"]),
-                     channel=rtio_offset + next(channel))
-        for ttl in peripheral["ttl"]:
-            ttl_class_names = {
-                "input": "TTLInOut",
-                "output": "TTLOut"
-            }
-            name = self.get_name(ttl["name"])
+                        name=self.get_name(spi["name"]),
+                        channel=rtio_offset + next(channel))
+        dio_config = peripheral.get("dio", {})
+        edge_counter = dio_config.get("edge_counter", False)
+        input_channels = [("TTLInOut", edge_counter) for _ in dio_config.get("input_channels", [])]
+        output_channels = [("TTLOut", False) for _ in dio_config.get("output_channels", [])]
+        clkgen_channels = [("TTLClockGen", False) for _ in dio_config.get("clkgen_channels", [])]
+        for dio_class_name, has_edge_counter in input_channels + output_channels + clkgen_channels:
+            name = self.get_name("ttl")
             self.gen("""
                 device_db["{name}"] = {{
                     "type": "local",
@@ -220,19 +221,19 @@ class PeripheralManager:
                     "class": "{class_name}",
                     "arguments": {{"channel": 0x{channel:06x}}},
                 }}""",
-                     name=name,
-                     class_name=ttl_class_names[ttl["direction"]],
-                     channel=rtio_offset + next(channel))
-            if ttl["edge_counter"]:
+                name=name,
+                class_name=dio_class_name,
+                channel=rtio_offset + next(channel))
+            if has_edge_counter:
                 self.gen("""
                     device_db["{name}_counter"] = {{
                         "type": "local",
-                        "module": "artiq.coredevice.edge_counter",
-                        "class": "EdgeCounter",
-                        "arguments": {{"channel": 0x{channel:06x}}},
+                         "module": "artiq.coredevice.edge_counter",
+                         "class": "EdgeCounter",
+                         "arguments": {{"channel": 0x{channel:06x}}},
                     }}""",
-                         name=name,
-                         channel=rtio_offset + next(channel))
+                    name=name,
+                    channel=rtio_offset + next(channel))
         return next(channel)
 
     def process_urukul(self, rtio_offset, peripheral):

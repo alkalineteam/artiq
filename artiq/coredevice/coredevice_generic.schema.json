@@ -293,7 +293,7 @@
                                 "type": "integer"
                             },
                             "minItems": 1,
-                            "maxItems": 1
+                            "maxItems": 2
                         },
                         "spi": {
                             "type": "array",
@@ -307,24 +307,24 @@
                                     "clk": {
                                         "type": "integer",
                                         "minimum": 0,
-                                        "maximum": 7
+                                        "maximum": 15
                                     },
                                     "mosi": {
                                         "type": "integer",
                                         "minimum": 0,
-                                        "maximum": 7
+                                        "maximum": 15
                                     },
                                     "miso": {
                                         "type": "integer",
                                         "minimum": 0,
-                                        "maximum": 7
+                                        "maximum": 15
                                     },
                                     "cs": {
                                         "type": "array",
                                         "items": {
                                             "type": "integer",
                                             "minimum": 0,
-                                            "maximum": 7
+                                            "maximum": 15
                                         }
                                     }
                                 },
@@ -332,32 +332,35 @@
                             },
                             "minItems": 1
                         },
-                        "ttl": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "name": {
-                                        "type": "string",
-                                        "default": "ttl"
-                                    },
-                                    "pin": {
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 7
-                                    },
-                                    "direction": {
-                                        "type": "string",
-                                        "enum": ["input", "output"]
-                                    },
-                                    "edge_counter": {
-                                        "type": "boolean",
-                                        "default": false
-                                    }
-                                },
-                                "required": ["pin", "direction"]
+                        "dio": {
+                            "edge_counter": {
+                                "type": "boolean",
+                                "default": false
                             },
-                            "default": []
+                            "input_channels": {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 15
+                                }
+                            },
+                            "output_channels": {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 15
+                                }
+                            },
+                            "clkgen_channels": {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 15
+                                }
+                            }
                         }
                     },
                     "required": ["ports", "spi"]

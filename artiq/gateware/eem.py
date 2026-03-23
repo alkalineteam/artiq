@@ -108,52 +108,71 @@ class DIO(_EEM):
 
 class DIO_SPI(_EEM):
     @staticmethod
-    def io(eem, spi, ttl, iostandard):
+    def io(eem0, eem1, spi, dio, iostandard):
+        def get_port_and_pin(channel):
+            if channel < 8:
+                return eem0, channel
+            elif eem1 is not None:
+                return eem1, channel-8
+            else:
+                raise ValueError("cannot assign channel 8-15 with single EEM port")
+
         def spi_subsignals(clk, mosi, miso, cs, pol):
-            signals = [Subsignal("clk", Pins(_eem_pin(eem, clk, pol)))]
+            signals = []
+            port, pin = get_port_and_pin(clk)
+            signals.append(Subsignal("clk", Pins(_eem_pin(port, pin, pol))))
             if mosi is not None:
-                signals.append(Subsignal("mosi",
-                                         Pins(_eem_pin(eem, mosi, pol))))
+                port, pin = get_port_and_pin(mosi)
+                signals.append(Subsignal("mosi", Pins(_eem_pin(port, pin, pol))))
             if miso is not None:
-                signals.append(Subsignal("miso",
-                                         Pins(_eem_pin(eem, miso, pol))))
+                port, pin = get_port_and_pin(miso)
+                signals.append(Subsignal("miso", Pins(_eem_pin(port, pin, pol))))
             if cs:
-                signals.append(Subsignal("cs_n", Pins(
-                    *(_eem_pin(eem, pin, pol) for pin in cs))))
+                cs_pins = []
+                for cs_channel in cs:
+                    port, pin = get_port_and_pin(cs_channel)
+                    cs_pins.append(_eem_pin(port, pin, pol))
+                signals.append(Subsignal("cs_n", Pins(*cs_pins)))
+            return signals
+
+        def dio_subsignals(dio, iostandard):
+            signals = []
+            for i, (channel0, _, _) in enumerate(dio):
+                port, pin = get_port_and_pin(channel)
+                signal_name = "dio{}".format(eem0)
+                signal = (signal_name, i,
+                          Subsignal("p", Pins(_eem_pin(port, pin, "p"))),
+                          Subsignal("n", Pins(_eem_pin(port, pin, "n"))),
+                          iostandard(eem0))
+                signals.append(signal)
             return signals
 
         spi = [
-            ("dio{}_spi{}_{}".format(eem, i, pol), i,
+            ("dio{}_spi{}_{}".format(eem0, i, pol), i,
              *spi_subsignals(clk, mosi, miso, cs, pol),
-             iostandard(eem))
+             iostandard(eem0))
             for i, (clk, mosi, miso, cs) in enumerate(spi) for pol in "pn"
         ]
-        ttl = [
-            ("dio{}".format(eem), i,
-             Subsignal("p", Pins(_eem_pin(eem, pin, "p"))),
-             Subsignal("n", Pins(_eem_pin(eem, pin, "n"))),
-             iostandard(eem))
-            for i, (pin, _, _) in enumerate(ttl)
-        ]
-        return spi + ttl
+        dio = dio_subsignals(dio, iostandard)
+        return spi + dio
 
     @classmethod
-    def add_std(cls, target, eem, spi, ttl, iostandard=default_iostandard):
-        cls.add_extension(target, eem, spi, ttl, iostandard=iostandard)
+    def add_std(cls, target, eem0, eem1, spi, dio, iostandard=default_iostandard):
+        cls.add_extension(target, eem0, eem1, spi, dio, iostandard=iostandard)
 
         for i in range(len(spi)):
             phy = spi2.SPIMaster(
-                target.platform.request("dio{}_spi{}_p".format(eem, i)),
-                target.platform.request("dio{}_spi{}_n".format(eem, i))
+                target.platform.request("dio{}_spi{}_p".format(eem0, i)),
+                target.platform.request("dio{}_spi{}_n".format(eem0, i))
             )
             target.submodules += phy
             target.rtio_channels.append(
                 rtio.Channel.from_phy(phy, ififo_depth=4))
 
-        dci = iostandard(eem).name == "LVDS"
-        for i, (_, ttl_cls, edge_counter_cls) in enumerate(ttl):
-            pads = target.platform.request("dio{}".format(eem), i)
-            phy = ttl_cls(pads.p, pads.n, dci=dci)
+        dci = iostandard(eem0).name == "LVDS"
+        for i, (_, dio_cls, edge_counter_cls) in enumerate(dio):
+            pads = target.platform.request("dio{}".format(eem0), i)
+            phy = dio_cls(pads.p, pads.n, dci=dci)
             target.submodules += phy
             target.rtio_channels.append(rtio.Channel.from_phy(phy))
 
