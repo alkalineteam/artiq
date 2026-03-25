@@ -85,6 +85,9 @@ class DummyScheduler:
     def check_pause(self, rid=None) -> bool:
         return False
 
+    def check_termination(self, rid=None) -> bool:
+        return False
+
     def pause(self):
         pass
 
