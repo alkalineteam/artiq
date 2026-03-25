@@ -254,7 +254,7 @@ class MultiScanManager:
     single scan.
 
     Scan objects must be passed as a list of tuples (name, scan_object).
-    Íteration produces scan points that have attributes that correspond
+    Iteration produces scan points that have attributes that correspond
     to the names of the scan objects, and have the last value yielded by
     that scan object.
     """
