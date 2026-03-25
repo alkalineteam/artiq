@@ -466,6 +466,8 @@ class RunTool:
 
 
 def symbolize(debug_library, addresses):
+    import nac3artiq
+
     if addresses == []:
         return []
 
