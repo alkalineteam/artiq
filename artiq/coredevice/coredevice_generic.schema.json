@@ -26,12 +26,6 @@
             "type": "string",
             "description": "Hardware revision"
         },
-        "base": {
-            "type": "string",
-            "enum": ["use_drtio_role", "standalone", "master", "satellite"],
-            "description": "Deprecated, use drtio_role instead",
-            "default": "use_drtio_role"
-        },
         "drtio_role": {
             "type": "string",
             "enum": ["standalone", "master", "satellite"],

@@ -10,6 +10,7 @@ ARTIQ-10 (Unreleased)
 * Multi-channel CoaXPress support.
 * Conda packaging is no longer supported.
 * Novogorny (the ancestor of Sampler) is no longer supported.
+* The deprecated "base" field of JSON system descriptions has been removed. Use "drtio_role" instead.
 
 ARTIQ-9
 -------
