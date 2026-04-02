@@ -120,7 +120,6 @@ class _DefaultArg(EnvExperiment):
     def test(self, foo: int32 = 42) -> int32:
         return foo
 
-    # NAC3TODO https://git.m-labs.hk/M-Labs/nac3/issues/101
     @kernel
     def run(self) -> int32:
         return self.test()
@@ -509,9 +508,8 @@ class _ArrayQuoting(EnvExperiment):
         assert self.arr_f64[1, 1, 0] == 6.0
         assert self.arr_f64[1, 1, 1] == 7.0
 
-        # NAC3TODO https://git.m-labs.hk/M-Labs/nac3/issues/421
-        #assert self.strs[0] == "foo"
-        #assert self.strs[1] == "bar"
+        assert self.strs[0] == "foo"
+        assert self.strs[1] == "bar"
 
 
 class ArrayQuotingTest(ExperimentCase):

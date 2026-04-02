@@ -325,8 +325,6 @@ class Core:
 
         @wraps(function)
         def run_precompiled():
-            # NAC3TODO: support returning values
-            # https://git.m-labs.hk/M-Labs/nac3/issues/101
             self._run_compiled(kernel_library, embedding_map)
 
         return run_precompiled

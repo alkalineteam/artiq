@@ -270,7 +270,6 @@ class SinaraTester(EnvExperiment):
             print("Testing TTL outputs: {}.".format(", ".join(name for name, dev in ttl_chunk)))
             self.test_ttl_out_chunk([dev for name, dev in ttl_chunk])
 
-    # NAC3TODO https://git.m-labs.hk/M-Labs/nac3/issues/101
     @kernel
     def test_ttl_in(self, ttl_out: TTLOut, ttl_in: TTLInOut) -> bool:
         n = 42
@@ -1123,7 +1122,6 @@ class SinaraTester(EnvExperiment):
         self.core.break_realtime()
         relay.enable(val)
 
-    # NAC3TODO https://git.m-labs.hk/M-Labs/nac3/issues/101
     @kernel
     def get_shuttler_output_voltage(self, adc: ShuttlerADC, ch: int32) -> float:
         self.core.break_realtime()
