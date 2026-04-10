@@ -113,7 +113,7 @@
             }
         }
     },
-    "required": ["target", "variant", "hw_rev", "base", "peripherals"],
+    "required": ["target", "variant", "hw_rev", "drtio_role", "peripherals"],
     "additionalProperties": false,
 
     "oneOf": [
