@@ -264,7 +264,7 @@ class ADF5356:
         )
         self._update_vco_timeout(f_pfd)
         self.regs[10] = ADF5356_REG10_ADC_CLK_DIV_UPDATE(
-            self.regs[10], min(ceil(((float(f_pfd) / 100e3) - 2) / 4), 255)
+            self.regs[10], min(ceil(((float(f_pfd) / 100e3) - 2.) / 4.), 255)
         )
 
         # commit
@@ -542,7 +542,7 @@ class ADF5356:
             ADF5356_REG10_ADC_ENABLE(1)
             # Equation (15)
             | ADF5356_REG10_ADC_CLK_DIV(
-                min(int32(ceil(((f_pfd / 100e3) - 2) / 4)), 255)
+                min(ceil(((f_pfd / int64(100e3)) - 2.) / 4.), 255)
             )
             | ADF5356_REG10_ADC_CONV(1)
         )
@@ -586,7 +586,7 @@ class ADF5356:
         See the "Register Map, Register 6, Negative Bleed" documentation.
         """
         return 1 if ((self.pll_frac1() == 0) and (self.pll_frac2() == 0)
-                and (self.f_pfd() <= 100 * MHz)) else 0
+                and (float(self.f_pfd()) <= 100. * MHz)) else 0
 
     @portable
     def _update_vco_timeout(self, f_pfd: int64):
@@ -595,13 +595,13 @@ class ADF5356:
 
         See the "Register Map, Register 9" documentation.
         """
-        autocal_timeout = ADF5356_REG9_AUTOCAL_TIMEOUT_GET(self.regs[9])
-        synth_lock_timeout = ADF5356_REG9_SYNTH_LOCK_TIMEOUT_GET(self.regs[9])
+        autocal_timeout = float(ADF5356_REG9_AUTOCAL_TIMEOUT_GET(self.regs[9]))
+        synth_lock_timeout = float(ADF5356_REG9_SYNTH_LOCK_TIMEOUT_GET(self.regs[9]))
         vco_timeout = max(
             # Inequality (13)
-            int32(floor((50. * us * float(f_pfd) / autocal_timeout) + 1)),
+            floor((50. * us * float(f_pfd) / autocal_timeout) + 1.),
             # Inequality (14)
-            int32(floor((20. * us * float(f_pfd) / synth_lock_timeout) + 1))
+            floor((20. * us * float(f_pfd) / synth_lock_timeout) + 1.)
         )
         self.regs[9] = ADF5356_REG9_TIMEOUT_UPDATE(self.regs[9], vco_timeout)
 
