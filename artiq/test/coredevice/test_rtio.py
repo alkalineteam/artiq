@@ -983,7 +983,7 @@ class DMATest(ExperimentCase):
     
     def test_dma_record_overhead(self):
         exp = self.create(_DMA)
-        is_zynq = exp.core.target_cls == CortexA9Target
+        is_zynq = exp.core.target == "cortexa9"
         n = 100
         total_dt = 0
         for i in range(n):
