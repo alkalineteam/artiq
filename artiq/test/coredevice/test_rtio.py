@@ -12,6 +12,7 @@ from artiq.test.hardware_testbench import ExperimentCase
 from artiq.coredevice import exceptions
 from artiq.coredevice.core import Core
 from artiq.coredevice.dma import CoreDMA
+from artiq.coredevice.rtio import RTIOBatch
 from artiq.coredevice.ttl import TTLOut, TTLInOut, TTLClockGen
 from artiq.coredevice.ad9914 import AD9914
 from artiq.coredevice.comm_mgmt import CommMgmt
@@ -591,35 +592,45 @@ class HandoverException(EnvExperiment):
         except DummyException:
             pass
 
-class RTIOBatching(EnvExperiment):
+@compile
+class RTIOBatching(EnvExperiment, Generic[TTLOutCapable]):
+    core: KernelInvariant[Core]
+    core_batch: KernelInvariant[RTIOBatch]
+    ttl_out: KernelInvariant[TTLOutCapable]
+
     def build(self):
         self.setattr_device("core")
         self.setattr_device("core_batch")
         self.setattr_device("ttl_out")
 
+    @rpc
+    def report(self, var: str, t: float):
+        self.set_dataset(var, t)
+
     @kernel
     def batching(self):
         self.core.reset()
-        delay(10*ms)
+        self.core.delay(10.*ms)
         with self.core_batch:
             for i in range(500):
-                self.ttl_out.pulse(250*ns)
-                delay(50*ns)
+                self.ttl_out.pulse(250.*ns)
+                self.core.delay(50.*ns)
+
     @kernel
     def full(self):
         self.core.reset()
         with self.core_batch:
             while True:
-                self.ttl_out.pulse(8*ns)
-                delay(8*ns)
+                self.ttl_out.pulse(8.*ns)
+                self.core.delay(8.*ns)
 
     @kernel
     def underflow(self):
         self.core.reset()
-        delay(0.1*ms)
+        self.core.delay(0.1*ms)
         with self.core_batch:
             for i in range(3000):
-                self.ttl_out.pulse(8*ns)
+                self.ttl_out.pulse(8.*ns)
 
     @kernel
     def time_empty_batch(self):
@@ -628,7 +639,7 @@ class RTIOBatching(EnvExperiment):
         with self.core_batch:
             pass
         t2 = self.core.get_rtio_counter_mu()
-        self.set_dataset("batch_time", self.core.mu_to_seconds(t2 - t1))
+        self.report("batch_time", self.core.mu_to_seconds(t2 - t1))
 
 class BatchTest(ExperimentCase):
     def test_acpki_batching(self):
