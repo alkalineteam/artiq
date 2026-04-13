@@ -29,12 +29,11 @@ def get_acpki_batcher(description):
     if description["enable_acpki"]:
         if description["target"] == "kasli_soc":
             return """\
-"core_batch" = {
+"core_batch": {
         "type": "local",
         "module": "artiq.coredevice.rtio",
-        "class": "RTIOBatch",
-    }
-            """
+        "class": "RTIOBatch"
+    },"""
         else:
             raise ValueError("ACPKI is supported only on Zynq devices")
     else:
@@ -111,7 +110,6 @@ def process_header(output, description):
                 "class": "CoreDMA"
             }},
             {acpki_batcher}
-
             "i2c_switch0": {{
                 "type": "local",
                 "module": "artiq.coredevice.i2c",
