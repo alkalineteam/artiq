@@ -1,6 +1,7 @@
 import unittest
 
 from numpy import int64
+from typing import Generic, TypeVar
 
 from artiq.experiment import *
 from artiq.coredevice.comm_analyzer import (decode_dump, StoppedMessage,
@@ -11,11 +12,14 @@ from artiq.coredevice.ttl import TTLOut, TTLInOut
 from artiq.test.hardware_testbench import ExperimentCase
 
 
+TTLOutCapable = TypeVar("TTLOutCapable", TTLInOut, TTLOut)
+
+
 @compile
-class CreateTTLPulse(EnvExperiment):
+class CreateTTLPulse(EnvExperiment, Generic[TTLOutCapable]):
     core: KernelInvariant[Core]
     loop_in: KernelInvariant[TTLInOut]
-    loop_out: KernelInvariant[TTLOut]
+    loop_out: KernelInvariant[TTLOutCapable]
 
     def build(self):
         self.setattr_device("core")

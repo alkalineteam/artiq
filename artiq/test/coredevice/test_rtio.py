@@ -5,6 +5,7 @@ import os, unittest
 from numpy import int32, int64
 
 from math import sqrt
+from typing import Generic, TypeVar
 
 from artiq.experiment import *
 from artiq.test.hardware_testbench import ExperimentCase
@@ -21,6 +22,9 @@ from artiq.coredevice.comm_analyzer import (StoppedMessage, OutputMessage, Input
 artiq_low_latency = os.getenv("ARTIQ_LOW_LATENCY")
 skip_if_no_opt = unittest.skipIf(os.getenv("NAC3_OPT_LEVEL") == "0",
                                  "timings are expected to be slow when program is unoptimized")
+
+
+TTLOutCapable = TypeVar("TTLOutCapable", TTLInOut, TTLOut)
 
 
 @compile
@@ -101,10 +105,10 @@ class RTT(EnvExperiment):
 
 
 @compile
-class Loopback(EnvExperiment):
+class Loopback(EnvExperiment, Generic[TTLOutCapable]):
     core: KernelInvariant[Core]
     loop_in: KernelInvariant[TTLInOut]
-    loop_out: KernelInvariant[TTLOut]
+    loop_out: KernelInvariant[TTLOutCapable]
 
     def build(self):
         self.setattr_device("core")
@@ -164,9 +168,9 @@ class ClockGeneratorLoopback(EnvExperiment):
 
 
 @compile
-class PulseRate(EnvExperiment):
+class PulseRate(EnvExperiment, Generic[TTLOutCapable]):
     core: KernelInvariant[Core]
-    ttl_out: KernelInvariant[TTLOut]
+    ttl_out: KernelInvariant[TTLOutCapable]
 
     def build(self):
         self.setattr_device("core")
@@ -233,10 +237,10 @@ class PulseRateAD9914DDS(EnvExperiment):
 
 
 @compile
-class LoopbackCount(EnvExperiment):
+class LoopbackCount(EnvExperiment, Generic[TTLOutCapable]):
     core: KernelInvariant[Core]
     loop_in: KernelInvariant[TTLInOut]
-    loop_out: KernelInvariant[TTLOut]
+    loop_out: KernelInvariant[TTLOutCapable]
     npulses: KernelInvariant[int32]
 
     def build(self, npulses):
@@ -270,10 +274,10 @@ class IncorrectPulseTiming(Exception):
 
 
 @compile
-class LoopbackGateTiming(EnvExperiment):
+class LoopbackGateTiming(EnvExperiment, Generic[TTLOutCapable]):
     core: KernelInvariant[Core]
     loop_in: KernelInvariant[TTLInOut]
-    loop_out: KernelInvariant[TTLOut]
+    loop_out: KernelInvariant[TTLOutCapable]
 
     def build(self):
         self.setattr_device("core")
@@ -342,10 +346,10 @@ class IncorrectLevel(Exception):
 
 
 @compile
-class Level(EnvExperiment):
+class Level(EnvExperiment, Generic[TTLOutCapable]):
     core: KernelInvariant[Core]
     loop_in: KernelInvariant[TTLInOut]
-    loop_out: KernelInvariant[TTLOut]
+    loop_out: KernelInvariant[TTLOutCapable]
 
     def build(self):
         self.setattr_device("core")
@@ -371,10 +375,10 @@ class Level(EnvExperiment):
 
 
 @compile
-class Watch(EnvExperiment):
+class Watch(EnvExperiment, Generic[TTLOutCapable]):
     core: KernelInvariant[Core]
     loop_in: KernelInvariant[TTLInOut]
-    loop_out: KernelInvariant[TTLOut]
+    loop_out: KernelInvariant[TTLOutCapable]
 
     def build(self):
         self.setattr_device("core")
@@ -407,9 +411,9 @@ class Watch(EnvExperiment):
 
 
 @compile
-class Underflow(EnvExperiment):
+class Underflow(EnvExperiment, Generic[TTLOutCapable]):
     core: KernelInvariant[Core]
-    ttl_out: KernelInvariant[TTLOut]
+    ttl_out: KernelInvariant[TTLOutCapable]
 
     def build(self):
         self.setattr_device("core")
@@ -442,9 +446,9 @@ class Overflow(EnvExperiment):
 
 
 @compile
-class SequenceError(EnvExperiment):
+class SequenceError(EnvExperiment, Generic[TTLOutCapable]):
     core: KernelInvariant[Core]
-    ttl_out: KernelInvariant[TTLOut]
+    ttl_out: KernelInvariant[TTLOutCapable]
 
     def build(self):
         self.setattr_device("core")
@@ -460,9 +464,9 @@ class SequenceError(EnvExperiment):
 
 
 @compile
-class Collision(EnvExperiment):
+class Collision(EnvExperiment, Generic[TTLOutCapable]):
     core: KernelInvariant[Core]
-    ttl_out_serdes: KernelInvariant[TTLOut]
+    ttl_out_serdes: KernelInvariant[TTLOutCapable]
 
     def build(self):
         self.setattr_device("core")
@@ -812,10 +816,10 @@ class RPCTest(ExperimentCase):
 
 
 @compile
-class _DMA(EnvExperiment):
+class _DMA(EnvExperiment, Generic[TTLOutCapable]):
     core: KernelInvariant[Core]
     core_dma: KernelInvariant[CoreDMA]
-    ttl_out: KernelInvariant[TTLOut]
+    ttl_out: KernelInvariant[TTLOutCapable]
     trace_name: Kernel[str]
     delta: Kernel[int64]
 
