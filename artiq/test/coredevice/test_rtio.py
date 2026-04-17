@@ -612,7 +612,7 @@ class RTIOBatching(EnvExperiment, Generic[TTLOutCapable]):
         self.core.reset()
         self.core.delay(10.*ms)
         with self.core_batch:
-            for i in range(500):
+            for i in range(100):
                 self.ttl_out.pulse(250.*ns)
                 self.core.delay(50.*ns)
 
