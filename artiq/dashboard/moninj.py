@@ -163,7 +163,7 @@ class _TTLWidget(_MoninjWidget):
 
 
 class _DDSModel:
-    def __init__(self, dds_type, ref_clk, cpld=None, pll=1, clk_div=0):
+    def __init__(self, dds_type, ref_clk, cpld=None, clk_div=0):
         self.cpld = cpld
         self.cur_frequency = 0
         self.cur_reg = 0
@@ -175,14 +175,11 @@ class _DDSModel:
         else:
             if dds_type == "AD9910":
                 max_freq = 1 << 32
-                clk_mult = [4, 1, 2, 4]
-            elif dds_type == "AD9912":  # AD9912
+            elif dds_type == "AD9912":
                 max_freq = 1 << 48
-                clk_mult = [1, 1, 2, 4]
             else:
                 raise NotImplementedError
-            sysclk = ref_clk / clk_mult[clk_div] * pll
-            self.ftw_per_hz = 1 / sysclk * max_freq
+            self.ftw_per_hz = 1 / 1e9 * max_freq
 
     def monitor_update(self, probe, value):
         if self.dds_type == "AD9912":
@@ -195,13 +192,13 @@ class _DDSModel:
 
 class _DDSWidget(_MoninjWidget):
     def __init__(self, dm, title, bus_channel, channel,
-                 dds_type, ref_clk, cpld=None, pll=1, clk_div=0):
+                 dds_type, ref_clk, cpld=None, clk_div=0):
         self.dm = dm
         self.bus_channel = bus_channel
         self.channel = channel
         self.dds_name = title
         self.cur_frequency = 0
-        self.dds_model = _DDSModel(dds_type, ref_clk, cpld, pll, clk_div)
+        self.dds_model = _DDSModel(dds_type, ref_clk, cpld, clk_div)
         self.title = title
 
         _MoninjWidget.__init__(self, title)
@@ -397,12 +394,11 @@ def setup_from_ddb(ddb):
                         dds_cpld = v["arguments"]["cpld_device"]
                         spi_dev = ddb[dds_cpld]["arguments"]["spi_device"]
                         bus_channel = ddb[spi_dev]["arguments"]["channel"]
-                        pll = v["arguments"]["pll_n"]
                         refclk = ddb[dds_cpld]["arguments"]["refclk"]
                         clk_div = ddb[dds_cpld]["arguments"].get("clk_div", 0)
                         widget = _WidgetDesc(k, comment, _DDSWidget,
                                              (k, bus_channel, channel, v["class"],
-                                              refclk, dds_cpld, pll, clk_div))
+                                              refclk, dds_cpld, clk_div))
                         description.add(widget)
                     elif (v["module"] == "artiq.coredevice.ad53xx" and v["class"] == "AD53xx") or \
                          (v["module"] == "artiq.coredevice.zotino" and v["class"] == "Zotino"):
