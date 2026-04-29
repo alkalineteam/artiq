@@ -152,7 +152,23 @@ pub enum Message<'a> {
     UpdateNow(u64),
 
     Log(fmt::Arguments<'a>),
-    LogSlice(&'a str)
+    LogSlice(&'a str),
+    GrabberUartReadRequest {
+        destination: u8,
+        g: u8,
+    },
+    GrabberUartReadReply {
+        succeeded: bool,
+        data: u8
+    },
+    GrabberUartWriteRequest {
+        destination: u8,
+        g: u8,
+        data: u8
+    },
+    GrabberUartWriteReply {
+        succeeded: bool
+    },
 }
 
 pub use self::Message::*;

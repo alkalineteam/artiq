@@ -111,9 +111,8 @@ pub fn cricon_read() -> RtioMaster {
 #[cfg(has_drtio_routing)]
 macro_rules! forward {
     ($router:expr, $routing_table:expr, $destination:expr, $rank:expr, $self_destination:expr, $repeaters:expr, $packet:expr) => {{
-        let hop = $routing_table.0[$destination as usize][$rank as usize];
-        if hop != 0 {
-            let repno = (hop - 1) as usize;
+        if let Some(repno) = $routing_table.get_linkno($destination, $rank) {
+            let repno = repno as usize;
             if repno < $repeaters.len() {
                 if $packet.expects_response() {
                     return $repeaters[repno].aux_forward($packet, $router, $routing_table, $rank, $self_destination);
@@ -159,7 +158,7 @@ fn process_aux_packet(dmamgr: &mut DmaManager, analyzer: &mut Analyzer, kernelmg
 
         drtioaux::Packet::DestinationStatusRequest { destination } => {
             #[cfg(has_drtio_routing)]
-            let hop = _routing_table.0[destination as usize][*rank as usize];
+            let hop = _routing_table.get_hop(destination, *rank);
             #[cfg(not(has_drtio_routing))]
             let hop = 0;
 
@@ -225,7 +224,7 @@ fn process_aux_packet(dmamgr: &mut DmaManager, analyzer: &mut Analyzer, kernelmg
 
         #[cfg(has_drtio_routing)]
         drtioaux::Packet::RoutingSetPath { destination, hops } => {
-            _routing_table.0[destination as usize] = hops;
+            _routing_table.set_hops(destination, hops);
             for rep in _repeaters.iter() {
                 if let Err(e) = rep.set_path(destination, &hops) {
                     error!("failed to set path ({})", e);
@@ -669,6 +668,35 @@ fn process_aux_packet(dmamgr: &mut DmaManager, analyzer: &mut Analyzer, kernelmg
                 },
             )
         }
+        drtioaux::Packet::GrabberUartReadRequest { destination: _destination, g: _g } => {
+            forward!(router, _routing_table, _destination, *rank, *self_destination, _repeaters, &packet);
+            #[cfg(has_grabber)]
+            {
+                let packet = match board_artiq::grabber::uart::read(_g) {
+                    Ok(data) => drtioaux::Packet::GrabberUartReadReply { succeeded: true, data },
+                    Err(_) => drtioaux::Packet::GrabberUartReadReply { succeeded: false, data: 0 }
+                };
+                drtioaux::send(0, &packet)
+            }
+            #[cfg(not(has_grabber))]
+            {
+                error!("satellite does not have grabber");
+                drtioaux::send(0, &drtioaux::Packet::GrabberUartReadReply { succeeded: false, data: 0 })
+            }
+        }
+        drtioaux::Packet::GrabberUartWriteRequest { destination: _destination, g: _g, data: _data } => {
+            forward!(router, _routing_table, _destination, *rank, *self_destination, _repeaters, &packet);
+            #[cfg(has_grabber)]
+            {
+                let succeeded = board_artiq::grabber::uart::write(_g, _data).is_ok();
+                drtioaux::send(0, &drtioaux::Packet::GrabberUartWriteReply { succeeded })
+            }
+            #[cfg(not(has_grabber))]
+            {
+                error!("satellite does not have grabber");
+                drtioaux::send(0, &drtioaux::Packet::GrabberUartWriteReply { succeeded: false })
+            }
+        }
 
         _ => {
             warn!("received unexpected aux packet");
@@ -746,13 +774,10 @@ fn init_rtio_crg() {
     }
 }
 
-#[cfg(not(has_rtio_crg))]
-fn init_rtio_crg() { }
-
+#[cfg(has_grabber)]
 fn hardware_tick(ts: &mut u64) {
     let now = clock::get_ms();
     if now > *ts {
-        #[cfg(has_grabber)]
         board_artiq::grabber::tick();
         *ts = now + 200;
     }
@@ -968,6 +993,7 @@ fn startup() {
         csr::eem_transceiver::txenable_write(0xffffffffu32 as _);
     }
 
+    #[cfg(has_rtio_crg)]
     init_rtio_crg();
 
     config::read_str("sed_spread_enable", |r| {
@@ -1001,6 +1027,7 @@ fn startup() {
     let mut rank = 1;
     let mut destination = 1;
 
+    #[cfg(has_grabber)]
     let mut hardware_tick_ts = 0;
 
     #[cfg(all(soc_platform = "efc", has_converter_spi))]
@@ -1021,7 +1048,11 @@ fn startup() {
             }
             #[cfg(soc_platform = "efc")]
             io_expander.service().expect("I2C I/O expander service failed");
-            hardware_tick(&mut hardware_tick_ts);
+            #[cfg(has_grabber)]
+            {
+                hardware_tick(&mut hardware_tick_ts);
+                board_artiq::grabber::uart::worker();
+            }
         }
 
         info!("uplink is up, switching to recovered clock");
@@ -1062,7 +1093,11 @@ fn startup() {
             }
             #[cfg(soc_platform = "efc")]
             io_expander.service().expect("I2C I/O expander service failed");
-            hardware_tick(&mut hardware_tick_ts);
+            #[cfg(has_grabber)]
+            {
+                hardware_tick(&mut hardware_tick_ts);
+                board_artiq::grabber::uart::worker();
+            }
             if drtiosat_tsc_loaded() {
                 info!("TSC loaded from uplink");
                 for rep in repeaters.iter() {

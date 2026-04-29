@@ -20,12 +20,6 @@ from unittest.mock import Mock
 import sphinx_rtd_theme
 
 
-# Ensure that ARTIQ-Python types are correctly printed
-# See: https://git.m-labs.hk/M-Labs/artiq/issues/710
-import builtins
-builtins.__in_sphinx__ = True
-
-
 # we cannot use autodoc_mock_imports (does not help with argparse)
 mock_modules = ["artiq.gui.waitingspinnerwidget",
                 "artiq.gui.flowlayout",
@@ -35,6 +29,7 @@ mock_modules = ["artiq.gui.waitingspinnerwidget",
                 "artiq.compiler.targets",
                 "artiq.dashboard.waveform",
                 "artiq.coredevice.jsondesc",
+                "nac3artiq",
                 "qasync", "lmdb", "dateutil.parser", "prettytable", "PyQt6",
                 "h5py", "llvmlite", "pythonparser", "tqdm", "jsonschema", "platformdirs"]
 

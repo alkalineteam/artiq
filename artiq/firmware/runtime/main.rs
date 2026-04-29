@@ -84,6 +84,14 @@ fn grabber_thread(io: sched::Io) {
     }
 }
 
+#[cfg(has_grabber)]
+fn grabber_uart_worker(io: sched::Io) {
+    loop {
+        board_artiq::grabber::uart::worker();
+        io.relinquish().unwrap();
+    }
+}
+
 fn setup_log_levels() {
     match config::read_str("log_level", |r| r.map(|s| s.parse())) {
         Ok(Ok(log_level_filter)) => {
@@ -187,7 +195,7 @@ fn startup() {
 
     #[cfg(has_drtio)]
     let drtio_routing_table = urc::Urc::new(RefCell::new(
-        drtio_routing::config_routing_table(csr::DRTIO.len())));
+        drtio_routing::RoutingTable::from_config(csr::DRTIO.len())));
     #[cfg(not(has_drtio))]
     let drtio_routing_table = urc::Urc::new(RefCell::new(
         drtio_routing::RoutingTable::default_empty()));
@@ -246,6 +254,9 @@ fn startup() {
 
     #[cfg(has_grabber)]
     io.spawn(4096, grabber_thread);
+
+    #[cfg(has_grabber)]
+    io.spawn(4096, grabber_uart_worker);
 
     let mut net_stats = ethmac::EthernetStatistics::new();
     loop {

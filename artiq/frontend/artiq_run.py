@@ -11,18 +11,13 @@ from collections import defaultdict
 
 import h5py
 
-from llvmlite import binding as llvm
-
 from sipyco import common_args
 
 from artiq import __version__ as artiq_version
 from artiq.language.environment import EnvExperiment, ProcessArgumentManager
-from artiq.language.types import TBool
 from artiq.master.databases import DeviceDB, DatasetDB
 from artiq.master.worker_db import DeviceManager, DatasetManager
-from artiq.coredevice.core import CompileError, host_only
-from artiq.compiler.embedding import EmbeddingMap
-from artiq.compiler import import_cache
+from artiq.language import import_cache
 from artiq import compat
 from artiq.tools import *
 
@@ -30,62 +25,23 @@ from artiq.tools import *
 logger = logging.getLogger(__name__)
 
 
-class StubObject:
-    def __setattr__(self, name, value):
-        pass
-
-
-class StubEmbeddingMap:
-    def __init__(self):
-        stub_object = StubObject()
-        self.object_forward_map = defaultdict(lambda: stub_object)
-        self.object_forward_map[1] = lambda _: None # return RPC
-        self.object_current_id = -1
-
-    def retrieve_object(self, object_id):
-        return self.object_forward_map[object_id]
-
-    def store_object(self, value):
-        self.object_forward_map[self.object_current_id] = value
-        self.object_current_id -= 1
-
-
 class FileRunner(EnvExperiment):
     def build(self, file):
         self.setattr_device("core")
         self.file = file
-        self.target = self.core.target_cls()
 
     def run(self):
         kernel_library = self.compile()
 
         self.core.comm.load(kernel_library)
         self.core.comm.run()
-        self.core.comm.serve(StubEmbeddingMap(),
-            lambda addresses: self.target.symbolize(kernel_library, addresses), \
-            lambda symbols: self.target.demangle(symbols))
+        self.core.comm.serve(None, None)
 
 
 class ELFRunner(FileRunner):
     def compile(self):
         with open(self.file, "rb") as f:
             return f.read()
-
-
-class LLVMIRRunner(FileRunner):
-    def compile(self):
-        with open(self.file, "r") as f:
-            llmodule = llvm.parse_assembly(f.read())
-        llmodule.verify()
-        return self.target.link([self.target.assemble(llmodule)])
-
-
-class LLVMBitcodeRunner(FileRunner):
-    def compile(self):
-        with open(self.file, "rb") as f:
-            llmodule = llvm.parse_bitcode(f.read())
-        llmodule.verify()
-        return self.target.link([self.target.assemble(llmodule)])
 
 
 class TARRunner(FileRunner):
@@ -126,10 +82,12 @@ class DummyScheduler:
     def get_status(self):
         return dict()
 
-    def check_pause(self, rid=None) -> TBool:
+    def check_pause(self, rid=None) -> bool:
         return False
 
-    @host_only
+    def check_termination(self, rid=None) -> bool:
+        return False
+
     def pause(self):
         pass
 
@@ -195,9 +153,7 @@ def _build_experiment(device_mgr, dataset_mgr, args):
     if hasattr(args, "file"):
         is_tar = tarfile.is_tarfile(args.file)
         is_elf = args.file.endswith(".elf")
-        is_ll  = args.file.endswith(".ll")
-        is_bc  = args.file.endswith(".bc")
-        if is_elf or is_ll or is_bc:
+        if is_elf:
             if args.arguments:
                 raise ValueError("arguments not supported for precompiled kernels")
             if args.class_name:
@@ -207,10 +163,6 @@ def _build_experiment(device_mgr, dataset_mgr, args):
             return TARRunner(managers, file=args.file)
         elif is_elf:
             return ELFRunner(managers, file=args.file)
-        elif is_ll:
-            return LLVMIRRunner(managers, file=args.file)
-        elif is_bc:
-            return LLVMBitcodeRunner(managers, file=args.file)
         else:
             import_cache.install_hook()
             module = file_import(args.file, prefix="artiq_run_")
@@ -233,21 +185,18 @@ def run(with_file=False):
     args = get_argparser(with_file).parse_args()
     common_args.init_logger_from_args(args)
 
-    device_mgr = DeviceManager(DeviceDB(args.device_db),
-                               virtual_devices={"scheduler": DummyScheduler(),
-                                                "ccb": DummyCCB()})
     dataset_db = DatasetDB(args.dataset_db)
     try:
         dataset_mgr = DatasetManager(dataset_db)
-
+        device_mgr = DeviceManager(DeviceDB(args.device_db),
+                                  virtual_devices={"scheduler": DummyScheduler(),
+                                                   "ccb": DummyCCB()})
         try:
             exp_inst = _build_experiment(device_mgr, dataset_mgr, args)
             exp_inst.prepare()
             exp_inst.run()
             device_mgr.notify_run_end()
             exp_inst.analyze()
-        except CompileError as error:
-            return
         except Exception as exn:
             if hasattr(exn, "artiq_core_exception"):
                 print(exn.artiq_core_exception, file=sys.stderr)
@@ -261,8 +210,8 @@ def run(with_file=False):
         else:
             for k, v in sorted(dataset_mgr.local.items(), key=itemgetter(0)):
                 print("{}: {}".format(k, v))
-        dataset_db.save()
     finally:
+        dataset_db.save()
         dataset_db.close_db()
 
 

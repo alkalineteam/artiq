@@ -13,7 +13,6 @@ import inspect
 import logging
 import traceback
 from collections import OrderedDict
-import importlib.util
 import linecache
 import threading
 
@@ -29,10 +28,8 @@ from artiq.master.worker_db import DeviceManager, DatasetManager, DummyDevice
 from artiq.language.environment import (
     is_public_experiment, TraceArgumentManager, ProcessArgumentManager
 )
-from artiq.language.core import host_only, set_watchdog_factory, TerminationRequested
-from artiq.language.types import TBool
-from artiq.compiler import import_cache
-from artiq.coredevice.core import CompileError, _render_diagnostic
+from artiq.language.core import set_watchdog_factory, TerminationRequested
+from artiq.language import import_cache
 from artiq import __version__ as artiq_version
 
 
@@ -121,19 +118,19 @@ class Scheduler:
         self.priority = priority
 
     pause_noexc = staticmethod(make_parent_action("pause"))
-    @host_only
+
     def pause(self):
         if self.pause_noexc():
             raise TerminationRequested
 
     _check_pause = staticmethod(make_parent_action("scheduler_check_pause"))
-    def check_pause(self, rid=None) -> TBool:
+    def check_pause(self, rid=None) -> bool:
         if rid is None:
             rid = self.rid
         return self._check_pause(rid)
 
     _check_termination = staticmethod(make_parent_action("scheduler_check_termination"))
-    def check_termination(self, rid=None) -> TBool:
+    def check_termination(self, rid=None) -> bool:
         if rid is None:
             rid = self.rid
         return self._check_termination(rid)
@@ -181,12 +178,7 @@ class StringLoader:
 
 def get_experiment_from_content(content, class_name):
     fake_filename = "expcontent"
-    spec = importlib.util.spec_from_loader(
-        "expmodule",
-        StringLoader(fake_filename, content)
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = tools.load_with_loader("expmodule", StringLoader(fake_filename, content))
     linecache.lazycache(fake_filename, module.__dict__)
     return tools.get_experiment(module, class_name)
 
@@ -253,53 +245,24 @@ class ArgumentManager(ProcessArgumentManager):
         return arguments
 
 
-def setup_diagnostics(experiment_file, repository_path):
-    def render_diagnostic(self, diagnostic):
-        message = "While compiling {}\n".format(experiment_file) + \
-                    _render_diagnostic(diagnostic, colored=False)
-        if repository_path is not None:
-            message = message.replace(repository_path, "<repository>")
-
-        if diagnostic.level == "warning":
-            logging.warning(message)
-        else:
-            logging.error(message)
-
-    # This is kind of gross, but 1) we do not have any explicit connection
-    # between the worker and a coredevice.core.Core instance at all,
-    # and 2) the diagnostic engine really ought to be per-Core, since
-    # that's what uses it and the repository path is per-Core.
-    # So I don't know how to implement this properly for now.
-    #
-    # This hack is as good or bad as any other solution that involves
-    # putting inherently local objects (the diagnostic engine) into
-    # global slots, and there isn't any point in making it prettier by
-    # wrapping it in layers of indirection.
-    artiq.coredevice.core._DiagnosticEngine.render_diagnostic = \
-        render_diagnostic
-
-
 def put_completed():
     put_object({"action": "completed"})
 
 
 def put_exception_report():
     _, exc, _ = sys.exc_info()
-    # When we get CompileError, a more suitable diagnostic has already
-    # been printed.
-    if not isinstance(exc, CompileError):
-        short_exc_info = type(exc).__name__
-        exc_str = str(exc)
-        if exc_str:
-            short_exc_info += ": " + exc_str.splitlines()[0]
-        lines = ["Terminating with exception ("+short_exc_info+")\n"]
-        if hasattr(exc, "artiq_core_exception"):
-            lines.append(str(exc.artiq_core_exception))
-        if hasattr(exc, "parent_traceback"):
-            lines += exc.parent_traceback
-            lines += traceback.format_exception_only(type(exc), exc)
-        logging.error("".join(lines).rstrip(),
-                      exc_info=not hasattr(exc, "parent_traceback"))
+    short_exc_info = type(exc).__name__
+    exc_str = str(exc)
+    if exc_str:
+        short_exc_info += ": " + exc_str.splitlines()[0]
+    lines = ["Terminating with exception ("+short_exc_info+")\n"]
+    if hasattr(exc, "artiq_core_exception"):
+        lines.append(str(exc.artiq_core_exception))
+    if hasattr(exc, "parent_traceback"):
+        lines += exc.parent_traceback
+        lines += traceback.format_exception_only(type(exc), exc)
+    logging.error("".join(lines).rstrip(),
+                    exc_info=not hasattr(exc, "parent_traceback"))
     put_object({"action": "exception"})
 
 
@@ -352,10 +315,8 @@ def main():
                     else:
                         experiment_file = expid["file"]
                         repository_path = None
-                    setup_diagnostics(experiment_file, repository_path)
                     exp = get_experiment_from_file(experiment_file, expid["class_name"])
                 else:
-                    setup_diagnostics("<none>", None)
                     exp = get_experiment_from_content(expid["content"], expid["class_name"])
                 device_mgr.virtual_devices["scheduler"].set_run_info(
                     rid, obj["pipeline_name"], expid, obj["priority"])

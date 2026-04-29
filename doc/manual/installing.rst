@@ -1,7 +1,7 @@
 Installing ARTIQ
 ================
 
-M-Labs recommends installing ARTIQ through Nix (on Linux) or MSYS2 (on Windows). It is also possible to use Conda (on either platform), but this is not preferred, and likely to become unsupported in the near future.
+ARTIQ can be installed using the Nix package manager on Linux, and using the MSYS2 software distribution on Windows.
 
 Installing via Nix (Linux)
 --------------------------
@@ -98,7 +98,7 @@ To spawn a shell in this environment, navigate to the directory containing the `
 
 The resulting shell will have access to ARTIQ as well as any additional packages you may have added. You can exit this shell at any time with CTRL+D or with the command ``exit``. Note that a first execution of ``nix shell`` on a given flake may take some time; repetitions of the same command will use stored versions of packages and run much more quickly.
 
-You might be interested in creating multiple directories containing separate ``flake.nix`` files to represent different sets of packages for different purposes. If you are familiar with Conda, using Nix in this way is similar to having multiple Conda environments.
+You might be interested in creating multiple directories containing separate ``flake.nix`` files to represent different sets of packages for different purposes.
 
 To find more packages you can browse the `Nix package search <https://search.nixos.org/packages>`_ website. If your favorite package is not available with Nix, contact M-Labs using the helpdesk@ email.
 
@@ -183,7 +183,7 @@ Alternatively, you may install `MSYS2 <https://msys2.org>`_, then edit ``C:\msys
 
     [artiq]
     SigLevel = Optional TrustAll
-    Server = https://msys2.m-labs.hk/artiq-beta
+    Server = https://msys2.m-labs.hk/artiq-nac3
 
 Launch ``MSYS2 CLANG64`` from the Windows Start menu to open the MSYS2 shell, and enter the following commands: ::
 
@@ -195,40 +195,6 @@ As above in the Nix section, you may find yourself wanting to add other useful p
   $ pacman -S <package name>
 
 For more see the `MSYS2 documentation <https://www.msys2.org/docs/package-management/>`_ on package management. If your favorite package is not available with MSYS2, contact M-Labs using the helpdesk@ email.
-
-Installing via Conda [DEPRECATED]
----------------------------------
-
-.. warning::
-  Installing ARTIQ via Conda is not recommended. Instead, Linux users should install it via Nix and Windows users should install it via MSYS2. Conda support may be removed in future ARTIQ releases and M-Labs can only provide very limited technical support for Conda.
-
-First, install `Anaconda <https://www.anaconda.com/download>`_ or the more minimalistic `Miniconda <https://conda.io/en/latest/miniconda.html>`_. After installing either Anaconda or Miniconda, open a new terminal and verify that the following command works::
-
-    $ conda
-
-Executing just ``conda`` should print the help of the ``conda`` command. If your shell cannot find the ``conda`` command, make sure that the Conda binaries are in your ``$PATH``. If ``$ echo $PATH`` does not show the Conda directories, add them: execute e.g. ``$ export PATH=$HOME/miniconda3/bin:$PATH`` if you installed Conda into ``~/miniconda3``.
-
-Controllers for third-party devices (e.g. Thorlabs TCube, Lab Brick Digital Attenuator, etc.) that are not shipped with ARTIQ can also be installed with this script. Browse `Hydra <https://nixbld.m-labs.hk/project/artiq>`_ or see the list of NDSPs in this manual to find the names of the corresponding packages, and list them at the beginning of the script.
-
-Set up the Conda channel and install ARTIQ into a new Conda environment: ::
-
-    $ conda config --prepend channels https://conda.m-labs.hk/artiq-beta
-    $ conda config --append channels conda-forge
-    $ conda create -n artiq artiq
-
-.. note::
-  On Windows, if the last command that creates and installs the ARTIQ environment fails with an error similar to "seeking backwards is not allowed", try re-running the command with admin rights.
-
-.. note::
-  For commercial use you might need a license for Anaconda/Miniconda or for using the Anaconda package channel. `Miniforge <https://github.com/conda-forge/miniforge>`_ might be an alternative in a commercial environment as it does not include the Anaconda package channel by default. If you want to use Anaconda/Miniconda/Miniforge in a commercial environment, please check the license and the latest terms of service.
-
-After the installation, activate the newly created environment by name. ::
-
-    $ conda activate artiq
-
-This activation has to be performed in every new shell you open to make the ARTIQ tools from that environment available.
-
-.. _installing-upgrading:
 
 Upgrading ARTIQ
 ---------------
@@ -248,15 +214,5 @@ Upgrading with MSYS2
 
 Run ``pacman -Syu`` to update all MSYS2 packages, including ARTIQ. If you get a message telling you that the shell session must be restarted after a partial update, open the shell again after the partial update and repeat the command. See the `MSYS2 <https://www.msys2.org/docs/updating/>`__ and `Pacman <https://wiki.archlinux.org/title/Pacman>`_ manuals for more information, including how to update individual packages if required.
 
-Upgrading with Conda
-^^^^^^^^^^^^^^^^^^^^
+You may need to reflash the gateware and firmware of the core device to keep it synchronized with the software.
 
-When upgrading ARTIQ or when testing different versions it is recommended that new Conda environments are created instead of upgrading the packages in existing environments. As a rule, keep previous environments around unless you are certain that they are no longer needed and the new environment is working correctly.
-
-To install the latest version, simply select a different environment name and run the installation commands again.
-
-Switching between Conda environments using commands such as ``$ conda deactivate artiq-7`` and ``$ conda activate artiq-8`` is the recommended way to roll back to previous versions of ARTIQ.
-
-You can list the environments you have created using::
-
-    $ conda env list

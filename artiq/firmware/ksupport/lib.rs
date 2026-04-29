@@ -565,6 +565,32 @@ extern "C-unwind" fn subkernel_await_message(id: i32, timeout: i64, tags: &CSlic
     // RpcRecvRequest should be called `count` times after this to receive message data
 }
 
+pub extern "C-unwind" fn grabber_read(destination: i32, g: i32) -> i32 {
+    send(&GrabberUartReadRequest {
+        destination: destination as u8,
+        g: g as u8,
+    });
+    recv!(&GrabberUartReadReply { succeeded, data } => {
+       if !succeeded {
+            raise!("GrabberSerialError", "Error occurred while reading from UART");
+       }
+       return data as i32;
+    })
+}
+
+pub extern "C-unwind" fn grabber_write(destination: i32, g: i32, data: i32) {
+    send(&GrabberUartWriteRequest {
+        destination: destination as u8,
+        g: g as u8,
+        data: data as u8,
+    });
+    recv!(&GrabberUartWriteReply { succeeded } => {
+        if !succeeded {
+           raise!("GrabberSerialError", "Error occurred while writing to UART");
+        }
+    })
+}
+
 unsafe fn attribute_writeback(typeinfo: *const ()) {
     #[repr(C)]
     struct Attr {

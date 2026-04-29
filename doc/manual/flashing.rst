@@ -55,20 +55,6 @@ On Linux
 
   NixOS users should configure OpenOCD through ``/etc/nixos/configuration.nix`` instead.
 
-Linux using Conda
-^^^^^^^^^^^^^^^^^
-
-  .. note::
-
-    With Conda, install OpenOCD as follows: ::
-
-      $ conda install -c m-labs openocd
-
-  If you are using a Conda environment ``artiq``, then execute the statements below. If you are using a different environment, you will have to replace ``artiq`` with the name of your environment::
-
-    $ sudo cp ~/.conda/envs/artiq/share/openocd/contrib/60-openocd.rules /etc/udev/rules.d
-    $ sudo udevadm trigger
-
 On Windows
 ^^^^^^^^^^
 

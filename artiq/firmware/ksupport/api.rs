@@ -188,10 +188,13 @@ static mut API: &'static [(&'static str, *const ())] = &[
     api!(cxp_start_roi_viewer = ::cxp::start_roi_viewer),
     api!(cxp_download_roi_viewer_frame = ::cxp::download_roi_viewer_frame),
 
+    api!(grabber_read = ::grabber_read),
+    api!(grabber_write = ::grabber_write),
+
     /*
      * syscall for unit tests
      * Used in `artiq.tests.coredevice.test_exceptions.ExceptionTest.test_raise_exceptions_kernel`
-     * This syscall checks that the exception IDs used in the Python `EmbeddingMap` (in `artiq.compiler.embedding`)
+     * This syscall checks that the exception IDs used in the Python `EmbeddingMap` (in `artiq.language.embedding_map`)
      * match the `EXCEPTION_ID_LOOKUP` defined in the firmware (`artiq::firmware::ksupport::eh_artiq`)
      */
     api!(test_exception_id_sync = ::eh_artiq::test_exception_id_sync)

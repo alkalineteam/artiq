@@ -2,21 +2,21 @@
 
 [![ARTIQ](https://git.m-labs.hk/M-Labs/artiq/raw/branch/master/doc/logo/artiq.png)](https://m-labs.hk/artiq)
 
-ARTIQ (Advanced Real-Time Infrastructure for Quantum physics) is a leading-edge control and data acquisition system for quantum information experiments.
+ARTIQ (which originally stood for "Advanced Real-Time Infrastructure for Quantum physics") is a leading-edge control and data acquisition system for quantum information experiments.
 It is maintained and developed by [M-Labs](https://m-labs.hk) and the initial development was for and in partnership with the [Ion Storage Group at NIST](https://www.nist.gov/pml/time-and-frequency-division/ion-storage). ARTIQ is free software and offered to the entire research community as a solution equally applicable to other challenging control tasks, including outside the field of ion trapping. Many laboratories around the world have adopted ARTIQ as their control system and some have [contributed](https://m-labs.hk/artiq/funding/) to it.
 
 The system features a high-level programming language, capable of describing complex experiments, which is compiled and executed on dedicated hardware with nanosecond timing resolution and sub-microsecond latency. It includes graphical user interfaces to parametrize and schedule experiments and to visualize and explore the results.
 
-ARTIQ uses FPGA hardware to perform its time-critical tasks. The [Sinara hardware](https://github.com/sinara-hw), and in particular the Kasli FPGA carrier, are designed to work with ARTIQ. ARTIQ is designed to be portable to hardware platforms from different vendors and FPGA manufacturers. Several different configurations of a [FPGA evaluation kit](https://www.xilinx.com/products/boards-and-kits/ek-k7-kc705-g.html) and a [Zynq evaluation kit](https://www.xilinx.com/products/boards-and-kits/ek-z7-zc706-g.html) are also used and supported. FPGA platforms can be combined with any number of additional peripherals, either already accessible from ARTIQ or made accessible with little effort.
+ARTIQ uses FPGA hardware to perform its time-critical tasks. The Sinara hardware ([GitHub](https://github.com/sinara-hw), [Gitea](https://git.m-labs.hk/sinara-hw/)), and in particular the Kasli FPGA carrier, are designed to work with ARTIQ. ARTIQ is designed to be portable to hardware platforms from different vendors and FPGA manufacturers; for example, the low-cost EBAZ4205 board is also used and supported. FPGA platforms can be combined with any number of additional peripherals, either already accessible from ARTIQ or made accessible with little effort.
 
 ARTIQ and its dependencies are available in the form of Nix packages (for Linux) and MSYS2 packages (for Windows). See [the manual](https://m-labs.hk/artiq/resources/) for installation instructions. Packages containing pre-compiled binary images to be loaded onto the hardware platforms are supplied for each configuration. Like any open-source software ARTIQ can equally be built and installed directly from [source](https://git.m-labs.hk/M-Labs/artiq).
 
 ARTIQ is supported by M-Labs and developed openly. Components, features, fixes, improvements, and extensions are often [funded](https://m-labs.hk/artiq/funding/) by and developed for the partnering research groups.
 
-Core technologies employed include [Python](https://www.python.org/), [Migen](https://git.m-labs.hk/M-Labs/migen), [Migen-AXI](https://github.com/peteut/migen-axi), [Rust](https://www.rust-lang.org/), [MiSoC](https://git.m-labs.hk/M-Labs/misoc)/[VexRiscv](https://github.com/SpinalHDL/VexRiscv), [LLVM](https://llvm.org/)/[llvmlite](https://github.com/numba/llvmlite), and [Qt6](https://www.qt.io/).
+Core technologies employed include [Python](https://www.python.org/), [Migen](https://git.m-labs.hk/M-Labs/migen), [Migen-AXI](https://github.com/peteut/migen-axi), [Rust](https://www.rust-lang.org/), [MiSoC](https://git.m-labs.hk/M-Labs/misoc)/[VexRiscv](https://github.com/SpinalHDL/VexRiscv), [LLVM](https://llvm.org/), and [Qt6](https://www.qt.io/).
 
-Website: https://m-labs.hk/artiq  
-(US-hosted mirror: https://m-labs-intl.com/artiq)
+Website: https://m-labs.hk/artiq
+(Mirror: https://m-labs-intl.com/artiq)
 
 [Cite ARTIQ](http://dx.doi.org/10.5281/zenodo.51303) as `Bourdeauducq, Sébastien et al. (2016). ARTIQ 1.0. Zenodo. 10.5281/zenodo.51303`.
 

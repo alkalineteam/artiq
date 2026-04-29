@@ -1,17 +1,26 @@
 import unittest
-import numpy as np
+import numpy
+
+from numpy import int32, int64, ndarray
+from typing import Literal
 
 from artiq.experiment import *
 from artiq.test.hardware_testbench import ExperimentCase
+from artiq.coredevice.core import Core
 from artiq.coredevice.adf5356 import (
     calculate_pll,
     split_msb_lsb_28b,
+    ADF5356,
     ADF5356_MODULUS1,
     ADF5356_MAX_MODULUS2,
 )
 
 
+@compile
 class ADF5356Exp(EnvExperiment):
+    core: KernelInvariant[Core]
+    dev: KernelInvariant[ADF5356]
+
     def build(self, runner):
         self.setattr_device("core")
         self.dev = self.get_device("mirny0_ch0")
@@ -19,6 +28,22 @@ class ADF5356Exp(EnvExperiment):
 
     def run(self):
         getattr(self, self.runner)()
+
+    @rpc
+    def report_int(self, var: str, t: int64):
+        self.set_dataset(var, t)
+
+    @rpc
+    def report_state(self, var: str, t: bool):
+        self.set_dataset(var, t)
+
+    @rpc
+    def report_array(self, var: str, t: ndarray[int32, Literal[1]]):
+        self.set_dataset(var, t)
+
+    @rpc
+    def update_array(self, var: str, n: int32, m: int32):
+        self.mutate_dataset(var, n, m)
 
     @kernel
     def instantiate(self):
@@ -38,18 +63,18 @@ class ADF5356Exp(EnvExperiment):
         self.dev.set_att_mu(0)
         f = 300.123456 * MHz
         self.dev.set_frequency(f)
-        self.set_dataset("freq_set", round(f / Hz))
-        self.set_dataset(
-            "freq_get", round(self.dev.f_vco() / self.dev.output_divider() / Hz)
-        )
+        self.report_int("freq_set", round64(f / Hz))
+        self.report_int(
+            "freq_get",
+            round64(self.dev.f_vco() / float(self.dev.output_divider()) / Hz))
 
     @kernel
     def set_too_high_frequency(self):
-        self.dev.set_frequency(10 * GHz)
+        self.dev.set_frequency(10. * GHz)
 
     @kernel
     def set_too_low_frequency(self):
-        self.dev.set_frequency(1 * MHz)
+        self.dev.set_frequency(1. * MHz)
 
     @kernel
     def muxout_lock_detect(self):
@@ -59,8 +84,8 @@ class ADF5356Exp(EnvExperiment):
         self.dev.set_att_mu(0)
         f = 300.123 * MHz
         self.dev.set_frequency(f)
-        delay(5 * ms)
-        self.set_dataset("muxout", self.dev.read_muxout())
+        self.core.delay(5. * ms)
+        self.report_state("muxout", self.dev.read_muxout())
 
     @kernel
     def muxout_lock_detect_no_lock(self):
@@ -69,9 +94,9 @@ class ADF5356Exp(EnvExperiment):
         self.dev.init()
         # set external SMA reference input
         self.dev.cpld.write_reg(1, (1 << 4))
-        self.dev.set_frequency(100 * MHz)
-        delay(5 * ms)
-        self.set_dataset("muxout", self.dev.read_muxout())
+        self.dev.set_frequency(100. * MHz)
+        self.core.delay(5. * ms)
+        self.report_state("muxout", self.dev.read_muxout())
 
     @kernel
     def set_get_output_power(self):
@@ -79,13 +104,13 @@ class ADF5356Exp(EnvExperiment):
         self.dev.cpld.init()
         self.dev.init()
         self.dev.set_att_mu(0)
-        self.dev.set_frequency(100 * MHz)
-        self.set_dataset("get_power", np.full(4, np.nan))
+        self.dev.set_frequency(100. * MHz)
+        self.report_array("get_power", numpy.full(4, -1))
         for n in range(4):
-            delay(10 * ms)
+            self.core.delay(10. * ms)
             self.dev.set_output_power_mu(n)
             m = self.dev.output_power_mu()
-            self.mutate_dataset("get_power", n, m)
+            self.update_array("get_power", n, m)
 
     @kernel
     def invalid_output_power_setting(self):
@@ -97,9 +122,9 @@ class ADF5356Exp(EnvExperiment):
         self.dev.cpld.init()
         self.dev.init()
         self.dev.set_att_mu(0)
-        self.dev.set_frequency(100 * MHz)
+        self.dev.set_frequency(100. * MHz)
         self.dev.disable_output()
-        delay(100 * us)
+        self.core.delay(100. * us)
         self.dev.enable_output()
 
 

@@ -559,12 +559,10 @@ mod remote_coremgmt {
 #[cfg(has_drtio)]
 macro_rules! process {
     ($io:ident, $aux_mutex:ident, $ddma_mutex:ident, $subkernel_mutex:ident, $routing_table:ident, $tcp_stream:ident, $destination: ident, $func:ident $(, $param:expr)*) => {{
-        let hop = $routing_table.0[$destination as usize][0];
-        if hop == 0 {
-            local_coremgmt::$func($io, $tcp_stream, $($param, )*)
-        } else {
-            let linkno = hop - 1;
+        if let Some(linkno) = $routing_table.get_linkno($destination, 0) {
             remote_coremgmt::$func($io, $aux_mutex, $ddma_mutex, $subkernel_mutex, $routing_table, linkno, $destination, $tcp_stream, $($param, )*)
+        } else {
+            local_coremgmt::$func($io, $tcp_stream, $($param, )*)
         }
     }}
 }

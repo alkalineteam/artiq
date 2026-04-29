@@ -6,11 +6,37 @@ import os
 import select
 import sys
 
+from numpy import int32, int64
+
 from artiq.experiment import *
+from artiq.coredevice.core import Core
+from artiq.coredevice.ttl import TTLOut, TTLInOut
+from artiq.coredevice.urukul import CPLD
 from artiq.coredevice.ad9910 import AD9910, SyncDataEeprom
-from artiq.coredevice.phaser import PHASER_GW_BASE, PHASER_GW_MIQRO
-from artiq.coredevice.shuttler import shuttler_volt_to_mu
-from artiq.coredevice.suservo import SyncDataEeprom as SUServoEeprom
+from artiq.coredevice.mirny import Mirny
+from artiq.coredevice.almazny import AlmaznyLegacy, AlmaznyChannel
+from artiq.coredevice.adf5356 import ADF5356
+from artiq.coredevice.sampler import Sampler
+from artiq.coredevice.zotino import Zotino
+from artiq.coredevice.fastino import Fastino
+from artiq.coredevice.phaser import Phaser, PHASER_GW_BASE, PHASER_GW_MIQRO
+from artiq.coredevice.grabber import Grabber
+from artiq.coredevice.exceptions import GrabberSerialError
+from artiq.coredevice.suservo import (
+    SUServo,
+    Channel as SUServoChannel,
+    SharedDDS as SUServoDDS,
+    SyncDataEeprom as SUServoEeprom)
+from artiq.coredevice.songbird import Songbird, DDS as SongbirdDDS
+from artiq.coredevice.shuttler import (
+    Config as ShuttlerConfig,
+    Trigger as ShuttlerTrigger,
+    DCBias as ShuttlerDCBias,
+    DDS as ShuttlerDDS,
+    Relay as ShuttlerRelay,
+    ADC as ShuttlerADC,
+    shuttler_volt_to_mu)
+from artiq.coredevice.cxp_grabber import CXPGrabber
 from artiq.master.databases import DeviceDB
 from artiq.master.worker_db import DeviceManager, DeviceError
 
@@ -30,7 +56,8 @@ def chunker(seq, size):
         yield res
 
 
-def is_enter_pressed() -> TBool:
+@rpc
+def is_enter_pressed() -> bool:
     if os.name == "nt":
         if msvcrt.kbhit() and msvcrt.getch() == b"\r":
             return True
@@ -44,7 +71,10 @@ def is_enter_pressed() -> TBool:
             return False
 
 
+@compile
 class SinaraTester(EnvExperiment):
+    core: KernelInvariant[Core]
+
     def build(self):
         self.setattr_device("core")
 
@@ -197,7 +227,7 @@ class SinaraTester(EnvExperiment):
         self.coaxpress_sfps = sorted(self.coaxpress_sfps.items(), key=lambda x: x[1].channel)
 
     @kernel
-    def test_led(self, led):
+    def test_led(self, led: TTLOut):
         while not is_enter_pressed():
             self.core.break_realtime()
             # do not fill the FIFOs too much to avoid long response times
@@ -205,8 +235,8 @@ class SinaraTester(EnvExperiment):
             while self.core.get_rtio_counter_mu() < t:
                 pass
             for i in range(3):
-                led.pulse(100*ms)
-                delay(100*ms)
+                led.pulse(100.*ms)
+                self.core.delay(100.*ms)
 
     def test_leds(self):
         print("*** Testing LEDs.")
@@ -217,7 +247,7 @@ class SinaraTester(EnvExperiment):
             self.test_led(led_dev)
 
     @kernel
-    def test_ttl_out_chunk(self, ttl_chunk):
+    def test_ttl_out_chunk(self, ttl_chunk: list[TTLOut]):
         while not is_enter_pressed():
             self.core.break_realtime()
             for _ in range(50000):
@@ -225,9 +255,9 @@ class SinaraTester(EnvExperiment):
                 for ttl in ttl_chunk:
                     i += 1
                     for _ in range(i):
-                        ttl.pulse(1*us)
-                        delay(1*us)
-                    delay(10*us)
+                        ttl.pulse(1.*us)
+                        self.core.delay(1.*us)
+                    self.core.delay(10.*us)
 
     def test_ttl_outs(self):
         print("*** Testing TTL outputs.")
@@ -241,16 +271,16 @@ class SinaraTester(EnvExperiment):
             self.test_ttl_out_chunk([dev for name, dev in ttl_chunk])
 
     @kernel
-    def test_ttl_in(self, ttl_out, ttl_in):
+    def test_ttl_in(self, ttl_out: TTLOut, ttl_in: TTLInOut) -> bool:
         n = 42
         self.core.break_realtime()
         with parallel:
-            ttl_in.gate_rising(1*ms)
+            ttl_in.gate_rising(1.*ms)
             with sequential:
-                delay(50*us)
+                self.core.delay(50.*us)
                 for _ in range(n):
-                    ttl_out.pulse(2*us)
-                    delay(2*us)
+                    ttl_out.pulse(2.*us)
+                    self.core.delay(2.*us)
         return ttl_in.count(now_mu()) == n
 
     def test_ttl_ins(self):
@@ -275,23 +305,25 @@ class SinaraTester(EnvExperiment):
                 print("FAILED")
 
     @kernel
-    def init_urukul(self, cpld):
+    def init_urukul(self, cpld: CPLD[Auto]):
         self.core.break_realtime()
         cpld.init()
 
     @kernel
-    def test_urukul_att(self, cpld):
+    def test_urukul_att(self, cpld: CPLD[Auto]):
         self.core.break_realtime()
         for i in range(32):
             test_word = 1 << i
             cpld.set_all_att_mu(test_word)
             readback_word = cpld.get_att_mu()
             if readback_word != test_word:
-                print(readback_word, test_word)
-                raise ValueError("Test and readback attenuator word mismatch")
+                print_rpc((readback_word, test_word))
+                # NAC3TODO raise ValueError("Test and readback attenuator word mismatch")
+                pass
 
+    # NAC3TODO: AD9912 support
     @kernel
-    def calibrate_urukul(self, channel):
+    def calibrate_urukul(self, channel: AD9910) -> tuple[int32, int32]:
         self.core.break_realtime()
         channel.init()
         self.core.break_realtime()
@@ -301,7 +333,7 @@ class SinaraTester(EnvExperiment):
         return sync_delay, io_update_delay
 
     @kernel
-    def setup_urukul(self, channel, frequency):
+    def setup_urukul(self, channel: AD9910, frequency: float):
         self.core.break_realtime()
         channel.init()
         channel.set(frequency*MHz)
@@ -309,12 +341,12 @@ class SinaraTester(EnvExperiment):
         channel.set_att(6.)
 
     @kernel
-    def cfg_sw_off_urukul(self, channel):
+    def cfg_sw_off_urukul(self, channel: AD9910):
         self.core.break_realtime()
         channel.cfg_sw(False)
 
     @kernel
-    def rf_switch_wave(self, channels):
+    def rf_switch_wave(self, channels: list[TTLOut]):
         while not is_enter_pressed():
             self.core.break_realtime()
             # do not fill the FIFOs too much to avoid long response times
@@ -322,8 +354,8 @@ class SinaraTester(EnvExperiment):
             while self.core.get_rtio_counter_mu() < t:
                 pass
             for channel in channels:
-                channel.pulse(100*ms)
-                delay(100*ms)
+                channel.pulse(100.*ms)
+                self.core.delay(100.*ms)
 
     # We assume that RTIO channels for switches are grouped by card.
     def test_urukuls(self):
@@ -346,7 +378,7 @@ class SinaraTester(EnvExperiment):
                 offset = channel_dev.sync_data.eeprom_offset
                 sync_delay, io_update_delay = self.calibrate_urukul(channel_dev)
                 print("{}\tSYNC_IN delay = {}, IO_UPDATE delay = {}".format(channel_name, sync_delay, io_update_delay))
-                eeprom_word = (sync_delay << 24) | (io_update_delay << 16)
+                eeprom_word = int32((sync_delay << 24) | (io_update_delay << 16))
                 eeprom.write_i32(offset, eeprom_word)
         print("...done")
 
@@ -357,25 +389,25 @@ class SinaraTester(EnvExperiment):
             for channel_n, (channel_name, channel_dev) in enumerate(channels):
                 frequency = 10*(card_n + 1) + channel_n
                 print("{}\t{}MHz".format(channel_name, frequency))
-                self.setup_urukul(channel_dev, frequency)
+                self.setup_urukul(channel_dev, float(frequency))
         print("Press ENTER when done.")
         input()
 
-        sw = [channel_dev for channel_name, channel_dev in self.urukuls if hasattr(channel_dev, "sw")]
+        sw = [channel_dev for channel_name, channel_dev in self.urukuls if channel_dev.sw.is_some()]
         if sw:
             print("Testing RF switch control. Check LEDs at urukul RF ports.")
             print("Press ENTER when done.")
             for swi in sw:
                 self.cfg_sw_off_urukul(swi)
-            self.rf_switch_wave([swi.sw for swi in sw])
+            self.rf_switch_wave([swi.sw.unwrap() for swi in sw])
 
     @kernel
-    def init_mirny(self, cpld):
+    def init_mirny(self, cpld: Mirny):
         self.core.break_realtime()
         cpld.init()
 
     @kernel
-    def setup_mirny(self, channel, frequency):
+    def setup_mirny(self, channel: ADF5356, frequency: float):
         self.core.break_realtime()
         channel.init()
 
@@ -384,15 +416,15 @@ class SinaraTester(EnvExperiment):
         self.core.break_realtime()
 
         channel.set_frequency(frequency*MHz)
-        delay(5*ms)
+        self.core.delay(5.*ms)
 
     @kernel
-    def sw_off_mirny(self, channel):
+    def sw_off_mirny(self, channel: ADF5356):
         self.core.break_realtime()
         channel.sw.off()
 
     @kernel
-    def mirny_rf_switch_wave(self, channels):
+    def mirny_rf_switch_wave(self, channels: list[TTLOut]):
         while not is_enter_pressed():
             self.core.break_realtime()
             # do not fill the FIFOs too much to avoid long response times
@@ -400,21 +432,21 @@ class SinaraTester(EnvExperiment):
             while self.core.get_rtio_counter_mu() < t:
                 pass
             for channel in channels:
-                channel.pulse(100*ms)
-                delay(100*ms)
+                channel.pulse(100.*ms)
+                self.core.delay(100.*ms)
     @kernel
-    def init_legacy_almazny(self, almazny):
+    def init_legacy_almazny(self, almazny: AlmaznyLegacy):
         self.core.break_realtime()
         almazny.init()
         almazny.output_toggle(True)
 
     @kernel
-    def legacy_almazny_set_attenuators_mu(self, almazny, ch, atts):
+    def legacy_almazny_set_attenuators_mu(self, almazny: AlmaznyLegacy, ch: int32, atts: int32):
         self.core.break_realtime()
         almazny.set_att_mu(ch, atts)
 
     @kernel
-    def legacy_almazny_att_test(self, almazny):
+    def legacy_almazny_att_test(self, almazny: AlmaznyLegacy):
         # change attenuation bit by bit over time for all channels
         att_mu = 0
         while not is_enter_pressed():
@@ -424,14 +456,14 @@ class SinaraTester(EnvExperiment):
                 pass
             for ch in range(4):
                 almazny.set_att_mu(ch, att_mu)
-            delay(250*ms)
+            self.core.delay(250.*ms)
             if att_mu == 0:
                 att_mu = 1
             else:
                 att_mu = (att_mu << 1) & 0x3F
     
     @kernel
-    def legacy_almazny_toggle_output(self, almazny, rf_on):
+    def legacy_almazny_toggle_output(self, almazny: AlmaznyLegacy, rf_on: bool):
         self.core.break_realtime()
         almazny.output_toggle(rf_on)
 
@@ -447,7 +479,7 @@ class SinaraTester(EnvExperiment):
             print("Testing attenuators. Frequencies:")
             for card_n, channels in enumerate(chunker(self.mirnies, 4)):
                 for channel_n, (channel_name, channel_dev) in enumerate(channels):
-                    frequency = 2000 + card_n * 250 + channel_n * 50
+                    frequency = 2000. + card_n * 250 + channel_n * 50
                     print("{}\t{}MHz".format(channel_name, frequency*2))
                     self.setup_mirny(channel_dev, frequency)
             self.init_legacy_almazny(almazny)
@@ -460,7 +492,7 @@ class SinaraTester(EnvExperiment):
             self.legacy_almazny_toggle_output(almazny, False)
 
     @kernel
-    def almazny_led_wave(self, almaznys):
+    def almazny_led_wave(self, almaznys: list[AlmaznyChannel]):
         while not is_enter_pressed():
             self.core.break_realtime()
             # do not fill the FIFOs too much to avoid long response times
@@ -469,11 +501,11 @@ class SinaraTester(EnvExperiment):
                 pass
             for ch in almaznys:
                 ch.set(31.5, False, True)
-                delay(100*ms)
+                self.core.delay(100.*ms)
                 ch.set(31.5, False, False)
     
     @kernel
-    def almazny_att_test(self, almaznys):
+    def almazny_att_test(self, almaznys: list[AlmaznyChannel]):
         rf_en = 1
         led = 1
         att_mu = 0
@@ -485,7 +517,7 @@ class SinaraTester(EnvExperiment):
             setting = led << 7 | rf_en << 6 | (att_mu & 0x3F)
             for ch in almaznys:
                 ch.set_mu(setting)
-            delay(1000*ms)
+            self.core.delay(1000.*ms)
             if att_mu == 0:
                 att_mu = 1
             else:
@@ -522,7 +554,7 @@ class SinaraTester(EnvExperiment):
         print("Frequencies:")
         for card_n, channels in enumerate(chunker(self.mirnies, 4)):
             for channel_n, (channel_name, channel_dev) in enumerate(channels):
-                frequency = 1000 + 100 * (card_n + 1) + channel_n * 10
+                frequency = float(1000 + 100 * (card_n + 1) + channel_n * 10)
                 print("{}\t{}MHz".format(channel_name, frequency))
                 self.setup_mirny(channel_dev, frequency)
                 print("{} info: {}".format(channel_name, channel_dev.info()))
@@ -537,17 +569,21 @@ class SinaraTester(EnvExperiment):
                 self.sw_off_mirny(swi)
             self.mirny_rf_switch_wave([swi.sw for swi in sw])
 
+    @rpc
+    def update_sampler_voltages(self, voltages: list[float]):
+        self.sampler_voltages = voltages
+
     @kernel
-    def get_sampler_voltages(self, sampler, cb):
+    def get_sampler_voltages(self, sampler: Sampler):
         self.core.break_realtime()
         sampler.init()
-        delay(5*ms)
+        self.core.delay(5.*ms)
         for i in range(8):
             sampler.set_gain_mu(i, 0)
-            delay(100*us)
-        smp = [0.0]*8
+            self.core.delay(100.*us)
+        smp = [0. for _ in range(8)]
         sampler.sample(smp)
-        cb(smp)
+        self.update_sampler_voltages(smp)
 
     def test_samplers(self):
         print("*** Testing Sampler ADCs.")
@@ -558,14 +594,10 @@ class SinaraTester(EnvExperiment):
                 print("Apply 1.5V to channel {}. Press ENTER when done.".format(channel))
                 input()
 
-                voltages = []
-                def setv(x):
-                    nonlocal voltages
-                    voltages = x
-                self.get_sampler_voltages(card_dev, setv)
+                self.get_sampler_voltages(card_dev)
 
                 passed = True
-                for n, voltage in enumerate(voltages):
+                for n, voltage in enumerate(self.sampler_voltages):
                     if n == channel:
                         if abs(voltage - 1.5) > 0.2:
                             passed = False
@@ -576,22 +608,22 @@ class SinaraTester(EnvExperiment):
                     print("PASSED")
                 else:
                     print("FAILED")
-                    print(" ".join(["{:.1f}".format(x) for x in voltages]))
+                    print(" ".join(["{:.1f}".format(x) for x in self.sampler_voltages]))
 
     @kernel
-    def set_zotino_voltages(self, zotino, voltages):
+    def set_zotino_voltages(self, zotino: Zotino, voltages: list[float]):
         self.core.break_realtime()
         zotino.init()
-        delay(200*us)
+        self.core.delay(200.*us)
         i = 0
         for voltage in voltages:
             zotino.write_dac(i, voltage)
-            delay(100*us)
+            self.core.delay(100.*us)
             i += 1
         zotino.load()
 
     @kernel
-    def zotinos_led_wave(self, zotinos):
+    def zotinos_led_wave(self, zotinos: list[Zotino]):
         while not is_enter_pressed():
             self.core.break_realtime()
             # do not fill the FIFOs too much to avoid long response times
@@ -601,9 +633,9 @@ class SinaraTester(EnvExperiment):
             for zotino in zotinos:
                 for i in range(8):
                     zotino.set_leds(1 << i)
-                    delay(100*ms)
+                    self.core.delay(100.*ms)
                 zotino.set_leds(0)
-                delay(100*ms)
+                self.core.delay(100.*ms)
 
     def test_zotinos(self):
         print("*** Testing Zotino DACs and USER LEDs.")
@@ -619,19 +651,19 @@ class SinaraTester(EnvExperiment):
         )
 
     @kernel
-    def set_fastino_voltages(self, fastino, voltages):
+    def set_fastino_voltages(self, fastino: Fastino, voltages: list[float]):
         self.core.break_realtime()
         fastino.init()
-        delay(200*us)
+        self.core.delay(200.*us)
         for i in range(0, 32, fastino.width):
             if fastino.width == 1:
                 fastino.set_dac(i, voltages[i])
             else:
                 fastino.set_group(i, voltages[i:i+fastino.width])
-            delay(100*us)
+            self.core.delay(100.*us)
 
     @kernel
-    def fastinos_led_wave(self, fastinos):
+    def fastinos_led_wave(self, fastinos: list[Fastino]):
         while not is_enter_pressed():
             self.core.break_realtime()
             # do not fill the FIFOs too much to avoid long response times
@@ -641,9 +673,9 @@ class SinaraTester(EnvExperiment):
             for fastino in fastinos:
                 for i in range(8):
                     fastino.set_leds(1 << i)
-                    delay(100*ms)
+                    self.core.delay(100.*ms)
                 fastino.set_leds(0)
-                delay(100*ms)
+                self.core.delay(100.*ms)
 
     def test_fastinos(self):
         print("*** Testing Fastino DACs and USER LEDs.")
@@ -659,44 +691,44 @@ class SinaraTester(EnvExperiment):
         )
 
     @kernel
-    def set_phaser_frequencies(self, phaser, duc, osc):
+    def set_phaser_frequencies(self, phaser: Phaser, duc: float, osc: list[float]):
         self.core.break_realtime()
         phaser.init()
-        delay(1*ms)
+        self.core.delay(1.*ms)
         if phaser.gw_rev == PHASER_GW_BASE:
             phaser.channel[0].set_duc_frequency(duc)
             phaser.channel[0].set_duc_cfg()
-            phaser.channel[0].set_att(6*dB)
+            phaser.channel[0].set_att(6.*dB)
             phaser.channel[1].set_duc_frequency(-duc)
             phaser.channel[1].set_duc_cfg()
-            phaser.channel[1].set_att(6*dB)
+            phaser.channel[1].set_att(6.*dB)
             phaser.duc_stb()
-            delay(1*ms)
+            self.core.delay(1.*ms)
             for i in range(len(osc)):
                 phaser.channel[0].oscillator[i].set_frequency(osc[i])
                 phaser.channel[0].oscillator[i].set_amplitude_phase(.2)
                 phaser.channel[1].oscillator[i].set_frequency(-osc[i])
                 phaser.channel[1].oscillator[i].set_amplitude_phase(.2)
-                delay(1*ms)
+                self.core.delay(1.*ms)
         elif phaser.gw_rev == PHASER_GW_MIQRO:
             for ch in range(2):
-                phaser.channel[ch].set_att(6*dB)
+                phaser.channel[ch].set_att(6.*dB)
                 phaser.channel[ch].set_duc_cfg()
-                sign = 1. - 2.*ch
+                sign = 1. - 2.*float(ch)
                 for i in range(len(osc)):
                     phaser.channel[ch].miqro.set_profile(i, profile=1,
-                        frequency=sign*(duc + osc[i]), amplitude=1./len(osc))
-                    delay(100*us)
+                                                         frequency=sign*(duc + osc[i]), amplitude=1./float(len(osc)))
+                    self.core.delay(100.*us)
                 phaser.channel[ch].miqro.set_window(
-                    start=0x000, iq=[[1., 0.]], order=0, tail=0)
+                    start=0x000, iq=[(1., 0.)], order=0, tail=False)
                 phaser.channel[ch].miqro.pulse(
                     window=0x000, profiles=[1 for _ in range(len(osc))])
-                delay(1*ms)
+                self.core.delay(1.*ms)
         else:
             raise ValueError
 
     @kernel
-    def phaser_led_wave(self, phasers):
+    def phaser_led_wave(self, phasers: list[Phaser]):
         while not is_enter_pressed():
             self.core.break_realtime()
             # do not fill the FIFOs too much to avoid long response times
@@ -706,9 +738,9 @@ class SinaraTester(EnvExperiment):
             for phaser in phasers:
                 for i in range(6):
                     phaser.set_leds(1 << i)
-                    delay(100*ms)
+                    self.core.delay(100.*ms)
                 phaser.set_leds(0)
-                delay(100*ms)
+                self.core.delay(100.*ms)
 
     def test_phasers(self):
         print("*** Testing Phaser DACs and 6 USER LEDs.")
@@ -864,9 +896,9 @@ class SinaraTester(EnvExperiment):
 
 
     @kernel
-    def grabber_capture(self, card_dev, rois):
+    def grabber_capture(self, card_dev: Grabber, rois: list[list[int32]]):
         self.core.break_realtime()
-        delay(100*us)
+        self.core.delay(100.*us)
         mask = 0
         for i in range(len(rois)):
             i = rois[i][0]
@@ -877,11 +909,36 @@ class SinaraTester(EnvExperiment):
             mask |= 1 << i
             card_dev.setup_roi(i, x0, y0, x1, y1)
         card_dev.gate_roi(mask)
-        n = [0]*len(rois)
+        n = [0 for _ in range(len(rois))]
         card_dev.input_mu(n)
         self.core.break_realtime()
         card_dev.gate_roi(0)
-        print("ROI sums:", n)
+        print_rpc(("ROI sums:", n))
+
+    @kernel
+    def basler_write_request(self, dev, addr_len, addr, data_len, data):
+        ftf = (addr_len >> 1) - 1
+
+        dev.write_serial(0x01)
+        dev.write_serial(ftf)
+        dev.write_serial(data_len)
+        for i in range(addr_len):
+            b = (addr >> i*8) & 0xff
+            dev.write_serial(b)
+
+        for i in range(data_len):
+            b = (data >> i*8) & 0xff
+            dev.write_serial(b)
+
+        dev.write_serial(0x03)
+        ack = 0
+        while True:
+            try:
+                ack = dev.read_serial()
+                break
+            except GrabberSerialError:
+                continue
+        assert ack == 0x06, "write request failed"
 
     def test_grabbers(self):
         print("*** Testing Grabber Frame Grabbers.")
@@ -893,17 +950,30 @@ class SinaraTester(EnvExperiment):
             return
         rois = [[0, 0, 0, 2, 2], [1, 0, 0, 2048, 2048]]
         print("ROIs:", rois)
-        for card_n, (card_name, card_dev) in enumerate(self.grabbers):
+
+        # AW00099704000, pg. 37
+        test_img_addr = 0x00030160 + 0x04
+        for card_name, card_dev in self.grabbers:
             print(card_name)
+            print("Type 'c' and ENTER to configure the camera to use a test image (Basler ace series cam).")
+            print("Just press ENTER to begin capture.")
+            if input().strip().lower() == 'c':
+                print("Writing test image setting to camera...")
+                card_dev.flush_serial()
+                self.basler_write_request(card_dev, 4, test_img_addr, 4, 1)
+                # delay to ensure setting is enabled before capture
+                now_mu = self.core.get_rtio_counter_mu()
+                self.core.wait_until_mu(now_mu + self.core.seconds_to_mu(1))
+            print("Starting capture...")
             self.grabber_capture(card_dev, rois)
 
     @kernel
-    def init_suservo(self, card_dev):
+    def init_suservo(self, card_dev: SUServoChannel):
         self.core.break_realtime()
         card_dev.init()
 
     @kernel
-    def calibrate_suservo(self, channel) -> TTuple([TInt32, TInt32, TInt32, TInt32, TInt32]):
+    def calibrate_suservo(self, channel: SUServoDDS) -> tuple[int32, int32, int32, int32, int32]:
         self.core.break_realtime()
         sync_delays = channel.tune_sync_delays()
         self.core.break_realtime()
@@ -914,9 +984,9 @@ class SinaraTester(EnvExperiment):
         return sync_delays[0], sync_delays[1], sync_delays[2], sync_delays[3], io_update_group_delay
 
     @kernel
-    def write_suservo_io_update_delay(self, channel, delay_list):
+    def write_suservo_io_update_delay(self, channel: SUServo, delay_list: list[int32]):
         self.core.break_realtime()
-        channel.set_config(enable=0, write_delay=True, io_update_delays=delay_list)
+        channel.set_config(enable=False, write_delay=True, io_update_delays=delay_list)
 
     @kernel
     def setup_suservo_signal_path(self, channel):
@@ -924,17 +994,17 @@ class SinaraTester(EnvExperiment):
         # ADC PGIA gain 0
         for i in range(8):
             channel.set_pgia_mu(i, 0)
-            delay(10*us)
+            self.core.delay(10.*us)
         # DDS attenuator 10dB
         for i in range(4):
             for cpld in channel.cplds:
                 cpld.set_att(i, 10.)
-        delay(1*us)
+        self.core.delay(1.*us)
         # Servo is done and disabled
-        assert channel.get_status() & 0xff == 2
+        # NAC3TODO assert channel.get_status() & 0xff == 2
 
     @kernel
-    def setup_suservo_loop(self, channel, loop_nr):
+    def setup_suservo_loop(self, channel: SUServoChannel, loop_nr: int32):
         self.core.break_realtime()
         channel.set_y(
             profile=loop_nr,
@@ -949,24 +1019,24 @@ class SinaraTester(EnvExperiment):
             delay=0.      # no IIR update delay after enabling
         )
         # setpoint 0.5 (5 V with above PGIA gain setting)
-        delay(100*us)
+        self.core.delay(100.*us)
         channel.set_dds(
             profile=loop_nr,
             offset=-.3,  # 3 V with above PGIA settings
-            frequency=10*MHz,
+            frequency=10.*MHz,
             phase=0.)
         # enable RF, IIR updates and set profile
-        delay(10*us)
-        channel.set(en_out=1, en_iir=1, profile=loop_nr)
+        self.core.delay(10.*us)
+        channel.set(en_out=True, en_iir=True, profile=loop_nr)
 
     @kernel
-    def setup_start_suservo(self, channel):
+    def setup_start_suservo(self, channel: SUServo):
         self.core.break_realtime()
-        channel.set_config(enable=1)
-        delay(10*us)
+        channel.set_config(enable=True)
+        self.core.delay(10.*us)
         # check servo enabled
-        assert channel.get_status() & 0x01 == 1
-        delay(10*us)
+        # NAC3TODO assert channel.get_status() & 0x01 == 1
+        self.core.delay(10.*us)
 
     def test_suservos(self):
         print("*** Testing SUServos.")
@@ -1021,7 +1091,8 @@ class SinaraTester(EnvExperiment):
         input()
 
     @kernel
-    def setup_shuttler_init(self, relay, adc, dcbias, dds, trigger, config):
+    def setup_shuttler_init(self, relay: ShuttlerRelay, adc: ShuttlerADC, dcbias: list[ShuttlerDCBias],
+                            dds: list[ShuttlerDDS], trigger: ShuttlerTrigger, config: ShuttlerConfig):
         self.core.break_realtime()
         # Reset Shuttler Output Relay
         relay.init()
@@ -1036,8 +1107,8 @@ class SinaraTester(EnvExperiment):
 
         delay_mu(int64(self.core.ref_multiplier))
         if adc.read_id() >> 4 != 0x038d:
-            print("Remote AFE Board's ADC is not found. Check Remote AFE Board's Cables Connections")
-            raise ValueError("Unexpected AFE ADC ID")
+            print_rpc("Remote AFE Board's ADC is not found. Check Remote AFE Board's Cables Connections")
+            # NAC3TODO raise ValueError("Unexpected AFE ADC ID")
 
         delay_mu(int64(self.core.ref_multiplier))
         adc.calibrate(dcbias, trigger, config)
@@ -1047,31 +1118,32 @@ class SinaraTester(EnvExperiment):
             self.setup_shuttler_set_output(dcbias, dds, trigger, ch, 0.0)
 
     @kernel 
-    def set_shuttler_relay(self, relay, val):
+    def set_shuttler_relay(self, relay: ShuttlerRelay, val: int32):
         self.core.break_realtime()
         relay.enable(val)
 
     @kernel
-    def get_shuttler_output_voltage(self, adc, ch, cb):
+    def get_shuttler_output_voltage(self, adc: ShuttlerADC, ch: int32) -> float:
         self.core.break_realtime()
-        cb(adc.read_ch(ch))
+        return adc.read_ch(ch)
 
     @kernel
-    def setup_shuttler_set_output(self, dcbias, dds, trigger, ch, volt):
+    def setup_shuttler_set_output(self, dcbias: list[ShuttlerDCBias], dds: list[ShuttlerDDS],
+                                  trigger: ShuttlerTrigger, ch: int32, volt: float):
         self.core.break_realtime()
         dcbias[ch].set_waveform(
             a0=shuttler_volt_to_mu(volt),
             a1=0,
-            a2=0,
-            a3=0,
+            a2=int64(0),
+            a3=int64(0),
         )
         delay_mu(int64(self.core.ref_multiplier))
 
         dds[ch].set_waveform(
             b0=0,
             b1=0,
-            b2=0,
-            b3=0,
+            b2=int64(0),
+            b3=int64(0),
             c0=0,
             c1=0,
             c2=0,
@@ -1082,7 +1154,7 @@ class SinaraTester(EnvExperiment):
         delay_mu(int64(self.core.ref_multiplier))
 
     @kernel
-    def shuttler_relay_led_wave(self, relay):
+    def shuttler_relay_led_wave(self, relay: ShuttlerRelay):
         while not is_enter_pressed():
             self.core.break_realtime()
             # do not fill the FIFOs too much to avoid long response times
@@ -1091,9 +1163,9 @@ class SinaraTester(EnvExperiment):
                 pass
             for ch in range(16):
                 relay.enable(1 << ch)
-                delay(100*ms)
+                self.core.delay(100.*ms)
             relay.enable(0x0000)
-            delay(100*ms)
+            self.core.delay(100.*ms)
 
     def test_shuttler(self):
         print("*** Testing Shuttler.")
@@ -1102,9 +1174,6 @@ class SinaraTester(EnvExperiment):
             print("Testing: ", card_name)
 
             output_voltage = 0.0
-            def setv(x):
-                nonlocal output_voltage
-                output_voltage = x
 
             self.setup_shuttler_init(card_dev["relay"], card_dev["adc"], card_dev["dcbias"], card_dev["dds"], card_dev["trigger"], card_dev["config"])
             
@@ -1124,7 +1193,7 @@ class SinaraTester(EnvExperiment):
             for ch, volt in enumerate(volt_set):
                 self.setup_shuttler_set_output(card_dev["dcbias"], card_dev["dds"], card_dev["trigger"], ch, volt)
                 self.get_shuttler_output_voltage(card_dev["adc"], ch, setv)
-                if (abs(volt) - abs(output_voltage)) > 0.1:
+                if abs(volt - output_voltage) > 0.1:
                     passed = False
                 adc_readings.append(output_voltage)
 
@@ -1140,16 +1209,16 @@ class SinaraTester(EnvExperiment):
                 print(f"ADC Readings:", " ".join(["{:.2f}".format(x) for x in adc_readings]))
 
     @kernel
-    def setup_songbird_init(self, config):
+    def setup_songbird_init(self, config: Songbird):
         self.core.break_realtime()
         config.init()
 
     @kernel
-    def setup_songbird_waveforms(self, card_n, config, ddss):
+    def setup_songbird_waveforms(self, card_n: int32, config: Songbird, ddss: list[SongbirdDDS]):
         self.core.break_realtime()
         n_dds = len(ddss)
         config.clear((1 << n_dds) - 1)
-        delay(1*ms)
+        delay(1.*ms)
         # Set some waveforms
         i = 1
         ampl_offset = 0x8000 // n_dds
@@ -1158,16 +1227,16 @@ class SinaraTester(EnvExperiment):
             freq_mu = config.frequency_to_mu(freq)
             channel.set_waveform(ampl_offset=ampl_offset, 
                                  damp=0, 
-                                 ddamp=0, 
-                                 dddamp=0, 
+                                 ddamp=int64(0), 
+                                 dddamp=int64(0), 
                                  phase_offset=0, 
                                  ftw=freq_mu,
                                  chirp=0,
                                  shift=0)
             i += 1
-            delay(1*ms)
+            delay(1.*ms)
         config.trigger((1 << n_dds) - 1)
-        delay(1*ms)
+        delay(1.*ms)
         config.clear(0)
 
     def test_songbirds(self):
@@ -1189,7 +1258,7 @@ class SinaraTester(EnvExperiment):
         input()
 
     @kernel
-    def boA2448_250cm_setup(self, dev):
+    def boA2448_250cm_setup(self, dev: CXPGrabber) -> int32:
         self.core.break_realtime()
 
         # from the camera XML file
@@ -1216,7 +1285,7 @@ class SinaraTester(EnvExperiment):
         return bit_depth
 
     @kernel
-    def test_coaxpress_sfp_rois(self, dev, rois, bit_depth):
+    def test_coaxpress_sfp_rois(self, dev: CXPGrabber, rois: list[list[int32]], bit_depth: int32):
         self.core.break_realtime()
         counts = [0] * len(rois)
         expected_counts = [0] * len(rois)
@@ -1236,14 +1305,15 @@ class SinaraTester(EnvExperiment):
         dev.gate_roi(mask)
         dev.send_cxp_linktrigger(0)
         dev.input_mu(counts)
-        delay(100 * ms)
+        self.core.delay(100. * ms)
         dev.gate_roi(0)
 
         if counts == expected_counts:
-            print("PASSED")
+            print_rpc("PASSED")
         else:
-            print("FAILED")
-            print("ROI counts:", counts)
+            print_rpc("FAILED")
+            print_rpc("ROI counts:")
+            print_rpc(counts)
 
     def test_coaxpress_sfps(self):
         print("*** Testing CoaXPress-SFPs.")

@@ -8,17 +8,19 @@ time results in a collision error.
 # Designed from the data sheets and somewhat after the linux kernel
 # iio driver.
 
-from numpy import int32
+from numpy import int32, int64
 
-from artiq.language.core import (kernel, portable, delay_mu, delay, now_mu,
-                                 at_mu)
+from artiq.language.core import *
 from artiq.language.units import ns, us
-from artiq.coredevice import spi2 as spi
+from artiq.coredevice.core import Core
+from artiq.coredevice.ttl import TTLOut
+from artiq.coredevice.spi2 import *
 
-SPI_AD53XX_CONFIG = (0*spi.SPI_OFFLINE | 1*spi.SPI_END |
-                     0*spi.SPI_INPUT | 0*spi.SPI_CS_POLARITY |
-                     0*spi.SPI_CLK_POLARITY | 1*spi.SPI_CLK_PHASE |
-                     0*spi.SPI_LSB_FIRST | 0*spi.SPI_HALF_DUPLEX)
+
+SPI_AD53XX_CONFIG = (0*SPI_OFFLINE | 1*SPI_END |
+                     0*SPI_INPUT | 0*SPI_CS_POLARITY |
+                     0*SPI_CLK_POLARITY | 1*SPI_CLK_PHASE |
+                     0*SPI_LSB_FIRST | 0*SPI_HALF_DUPLEX)
 
 AD53XX_CMD_DATA = 3 << 22
 AD53XX_CMD_OFFSET = 2 << 22
@@ -52,7 +54,7 @@ AD53XX_READ_AB3 = 0x109 << 7
 
 
 @portable
-def ad53xx_cmd_write_ch(channel, value, op):
+def ad53xx_cmd_write_ch(channel: int32, value: int32, op: int32) -> int32:
     """Returns the word that must be written to the DAC to set a DAC
     channel register to a given value.
 
@@ -67,7 +69,7 @@ def ad53xx_cmd_write_ch(channel, value, op):
 
 
 @portable
-def ad53xx_cmd_read_ch(channel, op):
+def ad53xx_cmd_read_ch(channel: int32, op: int32) -> int32:
     """Returns the word that must be written to the DAC to read a given
     DAC channel register.
 
@@ -82,7 +84,7 @@ def ad53xx_cmd_read_ch(channel, op):
 
 # maintain function definition for backward compatibility
 @portable
-def voltage_to_mu(voltage, offset_dacs=0x2000, vref=5.):
+def voltage_to_mu(voltage: float, offset_dacs: int32 = 0x2000, vref: float = 5.) -> int32:
     """Returns the 16-bit DAC register value required to produce a given output
     voltage, assuming offset and gain errors have been trimmed out.
 
@@ -100,22 +102,24 @@ def voltage_to_mu(voltage, offset_dacs=0x2000, vref=5.):
     :param vref: DAC reference voltage (default: 5.)
     :return: The 16-bit DAC register value
     """
-    code = int(round((1 << 16) * (voltage / (4. * vref)) + offset_dacs * 0x4))
+    code = round(float(1 << 16) * (voltage / (4. * vref))) + offset_dacs * 0x4
     if code < 0x0 or code > 0xffff:
         raise ValueError("Invalid DAC voltage!")
     return code
 
 
+@compile
 class _DummyTTL:
-    @portable
+    @kernel
     def on(self):
         pass
 
-    @portable
+    @kernel
     def off(self):
         pass
 
 
+@compile
 class AD53xx:
     """Analog devices AD53[67][0123] family of multi-channel Digital to Analog
     Converters.
@@ -137,8 +141,15 @@ class AD53xx:
       not transferred between experiments.
     :param core_device: Core device name (default: "core")
     """
-    kernel_invariants = {"bus", "ldac", "clr", "chip_select", "div_write",
-                         "div_read", "vref", "core"}
+    core: KernelInvariant[Core]
+    bus: KernelInvariant[SPIMaster]
+    ldac: KernelInvariant[TTLOut]
+    clr: KernelInvariant[TTLOut]
+    chip_select: KernelInvariant[int32]
+    div_write: KernelInvariant[int32]
+    div_read: KernelInvariant[int32]
+    vref: KernelInvariant[float]
+    offset_dacs: Kernel[int32]
 
     def __init__(self, dmgr, spi_device, ldac_device=None, clr_device=None,
                  chip_select=1, div_write=4, div_read=16, vref=5.,
@@ -161,7 +172,7 @@ class AD53xx:
         self.core = dmgr.get(core)
 
     @kernel
-    def init(self, blind=False):
+    def init(self, blind: bool = False):
         """Configures the SPI bus, drives LDAC and CLR high, programmes
         the offset DACs, and enables overtemperature shutdown.
 
@@ -177,22 +188,22 @@ class AD53xx:
                                self.chip_select)
         self.write_offset_dacs_mu(self.offset_dacs)
         if not blind:
-            ctrl = self.read_reg(channel=0, op=AD53XX_READ_CONTROL)
+            ctrl = self.read_reg(0, AD53XX_READ_CONTROL)
             if ctrl == 0xffff:
                 raise ValueError("DAC not found")
-            if ctrl & 0b10000:
+            if (ctrl & 0b10000) != 0:
                 raise ValueError("DAC over temperature")
-            delay(25*us)
+            self.core.delay(25.*us)
         self.bus.write(  # enable power and overtemperature shutdown
             (AD53XX_CMD_SPECIAL | AD53XX_SPECIAL_CONTROL | 0b0010) << 8)
         if not blind:
-            ctrl = self.read_reg(channel=0, op=AD53XX_READ_CONTROL)
+            ctrl = self.read_reg(0, AD53XX_READ_CONTROL)
             if (ctrl & 0b10111) != 0b00010:
                 raise ValueError("DAC CONTROL readback mismatch")
-            delay(15*us)
+            self.core.delay(15.*us)
 
     @kernel
-    def read_reg(self, channel=0, op=AD53XX_READ_X1A):
+    def read_reg(self, channel: int32 = 0, op: int32 = AD53XX_READ_X1A) -> int32:
         """Read a DAC register.
 
         This method advances the timeline by the duration of two SPI transfers
@@ -205,17 +216,16 @@ class AD53xx:
         :return: The 16-bit register value
         """
         self.bus.write(ad53xx_cmd_read_ch(channel, op) << 8)
-        self.bus.set_config_mu(SPI_AD53XX_CONFIG | spi.SPI_INPUT, 24,
+        self.bus.set_config_mu(SPI_AD53XX_CONFIG | SPI_INPUT, 24,
                                self.div_read, self.chip_select)
-        delay(270*ns)  # t_21 min sync high in readback
+        self.core.delay(270.*ns)  # t_21 min sync high in readback
         self.bus.write((AD53XX_CMD_SPECIAL | AD53XX_SPECIAL_NOP) << 8)
         self.bus.set_config_mu(SPI_AD53XX_CONFIG, 24, self.div_write,
                                self.chip_select)
-        # FIXME: the int32 should not be needed to resolve unification
-        return self.bus.read() & int32(0xffff)
+        return self.bus.read() & 0xffff
 
     @kernel
-    def write_offset_dacs_mu(self, value):
+    def write_offset_dacs_mu(self, value: int32):
         """Program the OFS0 and OFS1 offset DAC registers.
 
         Writes to the offset DACs take effect immediately without requiring
@@ -230,7 +240,7 @@ class AD53xx:
         self.bus.write((AD53XX_CMD_SPECIAL | AD53XX_SPECIAL_OFS1 | value) << 8)
 
     @kernel
-    def write_gain_mu(self, channel, gain=0xffff):
+    def write_gain_mu(self, channel: int32, gain: int32 = 0xffff):
         """Program the gain register for a DAC channel.
 
         The DAC output is not updated until LDAC is pulsed (see :meth:`load`).
@@ -242,7 +252,7 @@ class AD53xx:
             ad53xx_cmd_write_ch(channel, gain, AD53XX_CMD_GAIN) << 8)
 
     @kernel
-    def write_offset_mu(self, channel, offset=0x8000):
+    def write_offset_mu(self, channel: int32, offset: int32 = 0x8000):
         """Program the offset register for a DAC channel.
 
         The DAC output is not updated until LDAC is pulsed (see :meth:`load`).
@@ -254,7 +264,7 @@ class AD53xx:
             ad53xx_cmd_write_ch(channel, offset, AD53XX_CMD_OFFSET) << 8)
 
     @kernel
-    def write_offset(self, channel, voltage):
+    def write_offset(self, channel: int32, voltage: float):
         """Program the DAC offset voltage for a channel.
 
         An offset of +V can be used to trim out a DAC offset error of -V.
@@ -267,7 +277,7 @@ class AD53xx:
                                                     self.vref))
 
     @kernel
-    def write_dac_mu(self, channel, value):
+    def write_dac_mu(self, channel: int32, value: int32):
         """Program the DAC input register for a channel.
 
         The DAC output is not updated until LDAC is pulsed (see :meth:`load`).
@@ -277,7 +287,7 @@ class AD53xx:
             ad53xx_cmd_write_ch(channel, value, AD53XX_CMD_DATA) << 8)
 
     @kernel
-    def write_dac(self, channel, voltage):
+    def write_dac(self, channel: int32, voltage: float):
         """Program the DAC output voltage for a channel.
 
         The DAC output is not updated until LDAC is pulsed (see :meth:`load`).
@@ -299,11 +309,11 @@ class AD53xx:
         This method advances the timeline by two RTIO clock periods.
         """
         self.ldac.off()
-        delay_mu(2*self.bus.ref_period_mu)  # t13 = 10ns ldac pulse width low
+        delay_mu(int64(2)*self.bus.ref_period_mu)  # t13 = 10ns ldac pulse width low
         self.ldac.on()
 
     @kernel
-    def set_dac_mu(self, values, channels=list(range(40))):
+    def set_dac_mu(self, values: list[int32], channels: Option[list[int32]] = none):
         """Program multiple DAC channels and pulse LDAC to update the DAC
         outputs.
 
@@ -322,17 +332,18 @@ class AD53xx:
         t0 = now_mu()
 
         # t10: max busy period after writing to DAC registers
-        t_10 = self.core.seconds_to_mu(1500*ns)
+        t_10 = self.core.seconds_to_mu(1500.*ns)
         # compensate all delays that will be applied
-        delay_mu(-t_10-len(values)*self.bus.xfer_duration_mu)
+        delay_mu(-t_10-int64(len(values))*self.bus.xfer_duration_mu)
+        channels_list = channels.unwrap() if channels.is_some() else [i for i in range(40)]
         for i in range(len(values)):
-            self.write_dac_mu(channels[i], values[i])
+            self.write_dac_mu(channels_list[i], values[i])
         delay_mu(t_10)
         self.load()
         at_mu(t0)
 
     @kernel
-    def set_dac(self, voltages, channels=list(range(40))):
+    def set_dac(self, voltages: list[float], channels: Option[list[int32]] = none):
         """Program multiple DAC channels and pulse LDAC to update the DAC
         outputs.
 
@@ -351,8 +362,8 @@ class AD53xx:
         self.set_dac_mu(values, channels)
 
     @kernel
-    def calibrate(self, channel, vzs, vfs):
-        """ Two-point calibration of a DAC channel.
+    def calibrate(self, channel: int32, vzs: float, vfs: float):
+        """Two-point calibration of a DAC channel.
 
         Programs the offset and gain register to trim out DAC errors. Does not
         take effect until LDAC is pulsed (see :meth:`load`).
@@ -379,7 +390,7 @@ class AD53xx:
         self.write_gain_mu(channel, 0xffff-gain_err)
 
     @portable
-    def voltage_to_mu(self, voltage):
+    def voltage_to_mu(self, voltage: float) -> int32:
         """Returns the 16-bit DAC register value required to produce a given
         output voltage, assuming offset and gain errors have been trimmed out.
 

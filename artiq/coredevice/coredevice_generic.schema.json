@@ -26,12 +26,6 @@
             "type": "string",
             "description": "Hardware revision"
         },
-        "base": {
-            "type": "string",
-            "enum": ["use_drtio_role", "standalone", "master", "satellite"],
-            "description": "Deprecated, use drtio_role instead",
-            "default": "use_drtio_role"
-        },
         "drtio_role": {
             "type": "string",
             "enum": ["standalone", "master", "satellite"],
@@ -119,7 +113,7 @@
             }
         }
     },
-    "required": ["target", "variant", "hw_rev", "base", "peripherals"],
+    "required": ["target", "variant", "hw_rev", "drtio_role", "peripherals"],
     "additionalProperties": false,
 
     "oneOf": [
@@ -155,7 +149,7 @@
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": ["dio", "dio_spi", "urukul", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "phaser_drtio", "hvamp", "shuttler", "songbird", "coaxpress_sfp"]
+                    "enum": ["dio", "dio_spi", "urukul", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "phaser_drtio", "hvamp", "shuttler", "songbird", "coaxpress_sfp"]
                 },
                 "board": {
                     "type": "string"
@@ -177,29 +171,104 @@
                     }
                 },
                 "then": {
-                    "properties": {
-                        "ports": {
-                            "type": "array",
-                            "items": {
-                                "type": "integer"
+                    "if": {
+                        "properties": {
+                            "board": {
+                                "const": "RJ45_LVDS"
+                            }
+                        },
+                        "required": ["board"]
+                    },
+                    "then": {
+                        "properties": {
+                            "ports": {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer"
+                                },
+                                "minItems": 1,
+                                "maxItems": 2
                             },
-                            "minItems": 1,
-                            "maxItems": 1
+                            "edge_counter": {
+                                "type": "boolean",
+                                "default": false
+                            },
+                            "ch_direction_0_3": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": ["input", "output", "clkgen"]
+                                },
+                                "minItems": 4,
+                                "maxItems": 4
+                            },
+                            "ch_direction_4_7": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": ["input", "output", "clkgen"]
+                                },
+                                "minItems": 4,
+                                "maxItems": 4
+                            }
                         },
-                        "edge_counter": {
-                            "type": "boolean",
-                            "default": false
+                        "required": ["ports", "ch_direction_0_3", "ch_direction_4_7"],
+                        "if": {
+                            "properties": {
+                                "ports": {
+                                    "minItems": 2
+                                }
+                            }
                         },
-                        "bank_direction_low": {
-                            "type": "string",
-                            "enum": ["input", "output", "clkgen"]
-                        },
-                        "bank_direction_high": {
-                            "type": "string",
-                            "enum": ["input", "output", "clkgen"]
+                        "then": {
+                            "properties": {
+                                "ch_direction_8_11": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "enum": ["input", "output", "clkgen"]
+                                    },
+                                    "minItems": 4,
+                                    "maxItems": 4
+                                },
+                                "ch_direction_12_15": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "enum": ["input", "output", "clkgen"]
+                                    },
+                                    "minItems": 4,
+                                    "maxItems": 4
+                                }
+                            },
+                            "required": ["ch_direction_8_11", "ch_direction_12_15"]
                         }
                     },
-                    "required": ["ports", "bank_direction_low", "bank_direction_high"]
+                    "else": {
+                        "properties": {
+                            "ports": {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer"
+                                },
+                                "minItems": 1,
+                                "maxItems": 1
+                            },
+                            "edge_counter":{
+                                "type": "boolean",
+                                "default": false
+                            },
+                            "bank_direction_low": {
+                                "type": "string",
+                                "enum": ["input", "output", "clkgen"]
+                            },
+                            "bank_direction_high": {
+                                "type": "string",
+                                "enum": ["input", "output", "clkgen"]
+                            }
+                        },
+                        "required": ["ports", "bank_direction_low", "bank_direction_high"]
+                    }
                 }
             }, {
                 "title": "DIO_SPI",
@@ -218,7 +287,7 @@
                                 "type": "integer"
                             },
                             "minItems": 1,
-                            "maxItems": 1
+                            "maxItems": 2
                         },
                         "spi": {
                             "type": "array",
@@ -232,24 +301,24 @@
                                     "clk": {
                                         "type": "integer",
                                         "minimum": 0,
-                                        "maximum": 7
+                                        "maximum": 15
                                     },
                                     "mosi": {
                                         "type": "integer",
                                         "minimum": 0,
-                                        "maximum": 7
+                                        "maximum": 15
                                     },
                                     "miso": {
                                         "type": "integer",
                                         "minimum": 0,
-                                        "maximum": 7
+                                        "maximum": 15
                                     },
                                     "cs": {
                                         "type": "array",
                                         "items": {
                                             "type": "integer",
                                             "minimum": 0,
-                                            "maximum": 7
+                                            "maximum": 15
                                         }
                                     }
                                 },
@@ -257,32 +326,35 @@
                             },
                             "minItems": 1
                         },
-                        "ttl": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "name": {
-                                        "type": "string",
-                                        "default": "ttl"
-                                    },
-                                    "pin": {
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 7
-                                    },
-                                    "direction": {
-                                        "type": "string",
-                                        "enum": ["input", "output"]
-                                    },
-                                    "edge_counter": {
-                                        "type": "boolean",
-                                        "default": false
-                                    }
-                                },
-                                "required": ["pin", "direction"]
+                        "dio": {
+                            "edge_counter": {
+                                "type": "boolean",
+                                "default": false
                             },
-                            "default": []
+                            "input_channels": {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 15
+                                }
+                            },
+                            "output_channels": {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 15
+                                }
+                            },
+                            "clkgen_channels": {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 15
+                                }
+                            }
                         }
                     },
                     "required": ["ports", "spi"]
@@ -325,10 +397,8 @@
                             "maximum": 3
                         },
                         "pll_en": {
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": 1,
-                            "default": 1
+                            "type": "boolean",
+                            "default": true
                         },
                         "pll_vco": {
                             "type": "integer"
@@ -343,28 +413,6 @@
                             "default": "ad9910"
                         }
                     },                    
-                    "required": ["ports"]
-                }
-            }, {
-                "title": "Novogorny",
-                "if": {
-                    "properties": {
-                        "type": {
-                            "const": "novogorny"
-                        }
-                    }
-                },
-                "then": {
-                    "properties": {
-                        "ports": {
-                            "type": "array",
-                            "items": {
-                                "type": "integer"
-                            },
-                            "minItems": 1,
-                            "maxItems": 1
-                        }
-                    },
                     "required": ["ports"]
                 }
             }, {
@@ -455,10 +503,8 @@
                             "default": 32
                         },
                         "pll_en": {
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": 1,
-                            "default": 1
+                            "type": "boolean",
+                            "default": true
                         },
                         "pll_vco": {
                             "type": "integer"

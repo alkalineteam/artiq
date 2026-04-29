@@ -1,7 +1,11 @@
-from artiq.language.core import kernel, portable, delay
+from numpy import int32
+
+from artiq.language.core import compile, Kernel, KernelInvariant, kernel, portable
 from artiq.language.units import us
 
-from numpy import int32
+from artiq.coredevice.core import Core
+from artiq.coredevice.mirny import Mirny
+from artiq.coredevice.spi2 import *
 
 
 # almazny-specific data
@@ -15,6 +19,7 @@ ALMAZNY_LEGACY_OE_SHIFT = 12
 ALMAZNY_LEGACY_SPIT_WR = 32
 
 
+@compile
 class AlmaznyLegacy:
     """
     Almazny (High-frequency mezzanine board for Mirny)
@@ -25,8 +30,15 @@ class AlmaznyLegacy:
     :param host_mirny: :class:`~artiq.coredevice.mirny.Mirny` device Almazny is connected to
     """
 
+    core: KernelInvariant[Core]
+    mirny_cpld: KernelInvariant[Mirny]
+    att_mu: Kernel[list[int32]]
+    channel_sw: Kernel[list[int32]]
+    output_enable: Kernel[bool]
+
     def __init__(self, dmgr, host_mirny):
         self.mirny_cpld = dmgr.get(host_mirny)
+        self.core = self.mirny_cpld.core
         self.att_mu = [0x3f] * 4
         self.channel_sw = [0] * 4
         self.output_enable = False
@@ -36,7 +48,7 @@ class AlmaznyLegacy:
         self.output_toggle(self.output_enable)
 
     @kernel
-    def att_to_mu(self, att):
+    def att_to_mu(self, att: float) -> int32:
         """
         Convert an attenuator setting in dB to machine units.
 
@@ -49,17 +61,17 @@ class AlmaznyLegacy:
         return mu
 
     @kernel
-    def mu_to_att(self, att_mu):
+    def mu_to_att(self, att_mu: int32) -> float:
         """
         Convert a digital attenuator setting to dB.
 
         :param att_mu: attenuator setting in machine units
         :return: attenuator setting in dB
         """
-        return att_mu / 2
+        return float(att_mu) / 2.
 
     @kernel
-    def set_att(self, channel, att, rf_switch=True):
+    def set_att(self, channel: int32, att: float, rf_switch: bool = True):
         """
         Sets attenuators on chosen shift register (channel).
 
@@ -70,7 +82,7 @@ class AlmaznyLegacy:
         self.set_att_mu(channel, self.att_to_mu(att), rf_switch)
 
     @kernel
-    def set_att_mu(self, channel, att_mu, rf_switch=True):
+    def set_att_mu(self, channel: int32, att_mu: int32, rf_switch: bool = True):
         """
         Sets attenuators on chosen shift register (channel).
 
@@ -83,7 +95,7 @@ class AlmaznyLegacy:
         self._update_register(channel)
 
     @kernel
-    def output_toggle(self, oe):
+    def output_toggle(self, oe: bool):
         """
         Toggles output on all shift registers on or off.
 
@@ -92,13 +104,13 @@ class AlmaznyLegacy:
         self.output_enable = oe
         cfg_reg = self.mirny_cpld.read_reg(1)
         en = 1 if self.output_enable else 0
-        delay(100 * us)
+        self.core.delay(100. * us)
         new_reg = (en << ALMAZNY_LEGACY_OE_SHIFT) | (cfg_reg & 0x3FF)
         self.mirny_cpld.write_reg(1, new_reg)
-        delay(100 * us)
+        self.core.delay(100. * us)
 
     @kernel
-    def _flip_mu_bits(self, mu):
+    def _flip_mu_bits(self, mu: int32) -> int32:
         # in this form MSB is actually 0.5dB attenuator
         # unnatural for users, so we flip the six bits
         return (((mu & 0x01) << 5)
@@ -109,16 +121,17 @@ class AlmaznyLegacy:
                 | ((mu & 0x20) >> 5))
 
     @kernel
-    def _update_register(self, ch):
+    def _update_register(self, ch: int32):
         self.mirny_cpld.write_ext(
             ALMAZNY_LEGACY_REG_BASE + ch, 
             8, 
             self._flip_mu_bits(self.att_mu[ch]) | (self.channel_sw[ch] << 6), 
             ALMAZNY_LEGACY_SPIT_WR
         )
-        delay(100 * us)
+        self.core.delay(100. * us)
 
 
+@compile
 class AlmaznyChannel:
     """
     Driver for one Almazny channel.
@@ -133,12 +146,17 @@ class AlmaznyChannel:
     :param channel: channel index (0-3)
     """
 
+    core: KernelInvariant[Core]
+    mirny_cpld: KernelInvariant[Mirny]
+    channel: KernelInvariant[int32]
+
     def __init__(self, dmgr, host_mirny, channel):
-        self.channel = channel
         self.mirny_cpld = dmgr.get(host_mirny)
+        self.core = self.mirny_cpld.core
+        self.channel = channel
 
     @portable
-    def to_mu(self, att, enable, led):
+    def to_mu(self, att: float, enable: bool, led: bool) -> int32:
         """
         Convert an attenuation in dB, RF switch state and LED state to machine
         units.
@@ -148,7 +166,7 @@ class AlmaznyChannel:
         :param led: LED state (bool)
         :return: channel setting in machine units
         """
-        mu = int32(round(att * 2.))
+        mu = round(att * 2.)
         if mu >= 64 or mu < 0:
             raise ValueError("Attenuation out of range")
         # unfortunate hardware design: bit reverse
@@ -161,7 +179,7 @@ class AlmaznyChannel:
         return mu
 
     @kernel
-    def set_mu(self, mu):
+    def set_mu(self, mu: int32):
         """
         Set channel state (machine units).
 
@@ -171,7 +189,7 @@ class AlmaznyChannel:
             addr=0xc + self.channel, length=8, data=mu, ext_div=32)
 
     @kernel
-    def set(self, att, enable, led=False):
+    def set(self, att: float, enable: bool, led: bool = False):
         """
         Set attenuation, RF switch, and LED state (SI units).
 

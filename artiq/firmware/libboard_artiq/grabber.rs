@@ -157,3 +157,139 @@ pub fn tick() {
         unsafe { INFO[g].state = next; }
     }
 }
+
+pub mod uart {
+    use board_misoc::csr;
+    use super::{pll_locked};
+
+    #[derive(Debug)]
+    pub enum Error {
+        BufferOverflow,
+        BufferEmpty
+    }
+
+    const BUFFER_SIZE: usize = 64;
+
+    struct Buffer {
+        head: usize,
+        tail: usize,
+        size: usize,
+        data: [u8; BUFFER_SIZE],
+    }
+
+    impl Buffer {
+        fn is_full(&self) -> bool {
+            self.size == BUFFER_SIZE
+        }
+
+        fn is_empty(&self) -> bool {
+            self.size == 0
+        }
+
+        fn pop(&mut self) -> Result<u8, Error> {
+            if self.is_empty() {
+                return Err(Error::BufferEmpty);
+            }
+            let val = self.data[self.head];
+            self.head = (self.head + 1) % BUFFER_SIZE;
+            self.size -= 1;
+            Ok(val)
+        }
+
+        fn push(&mut self, val: u8) -> Result<(), Error> {
+            let tail = (self.tail + 1) % BUFFER_SIZE;     
+            if self.is_full() {
+                return Err(Error::BufferOverflow);
+            }
+            self.data[self.tail] = val;
+            self.tail = tail;
+            self.size += 1;
+            Ok(())
+        }
+
+        fn clear(&mut self) {
+            self.head = 0;
+            self.tail = 0;
+            self.size = 0;
+        }
+    }
+
+    const DEFAULT_BUF: Buffer = Buffer {
+        head: 0,
+        tail: 0,
+        size: 0,
+        data: [0; BUFFER_SIZE]
+    };
+
+    static mut TX_BUFFERS: [Buffer; csr::GRABBER.len()] = [DEFAULT_BUF; csr::GRABBER.len()]; 
+
+    static mut RX_BUFFERS: [Buffer; csr::GRABBER.len()] = [DEFAULT_BUF; csr::GRABBER.len()]; 
+
+    static mut RESET: [bool; csr::GRABBER.len()] = [true; csr::GRABBER.len()];
+
+    pub fn worker() {
+        for g in 0..csr::GRABBER.len() {
+            unsafe {
+                if !pll_locked(g) {
+                    RESET[g] = true;
+                    continue
+                }
+                if RESET[g] {
+                   while !rxempty(g) {
+                       read_byte(g);
+                   }
+                   RESET[g] = false;
+                   continue
+                }
+                while !rxempty(g) {
+                    if RX_BUFFERS[g].is_full() {
+                        error!("rx buffer overflow, clearing");
+                        RX_BUFFERS[g].clear();
+                        break
+                    }
+                    RX_BUFFERS[g].push(read_byte(g)).unwrap();
+                }
+                while !txfull(g) {
+                    if let Ok(b) = TX_BUFFERS[g].pop() {
+                        write_byte(g, b);
+                    } else {
+                        break
+                    }
+                }
+                RESET[g] = false; 
+            }
+        }
+    }
+
+    fn txfull(g: usize) -> bool {
+        unsafe { (csr::GRABBER[g].txfull_read)() != 0 }
+    }
+
+    fn rxempty(g: usize) -> bool {
+        unsafe { (csr::GRABBER[g].rxempty_read)() != 0 }
+    }
+
+    fn write_byte(g: usize, val: u8) {
+        unsafe { (csr::GRABBER[g].tx_write)(val) };
+    }
+
+    fn read_byte(g: usize) -> u8 {
+        unsafe {
+            let val = (csr::GRABBER[g].rx_read)();
+            (csr::GRABBER[g].rx_write)(1); // rx_fifo source ACK
+            val
+        }
+    }
+
+    pub fn write(g: u8, data: u8) -> Result<(), Error> {
+        unsafe {
+            TX_BUFFERS[g as usize].push(data)
+        }
+    }
+
+    pub fn read(g: u8) -> Result<u8, Error> {
+        unsafe {
+            RX_BUFFERS[g as usize].pop()
+        }
+    }
+}

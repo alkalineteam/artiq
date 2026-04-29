@@ -1,11 +1,26 @@
+import unittest
+
+from numpy import int64
+from typing import Generic, TypeVar
+
 from artiq.experiment import *
 from artiq.coredevice.comm_analyzer import (decode_dump, StoppedMessage,
                                             OutputMessage, InputMessage,
                                            _extract_log_chars, get_analyzer_dump)
+from artiq.coredevice.core import Core
+from artiq.coredevice.ttl import TTLOut, TTLInOut
 from artiq.test.hardware_testbench import ExperimentCase
 
 
-class CreateTTLPulse(EnvExperiment):
+TTLOutCapable = TypeVar("TTLOutCapable", TTLInOut, TTLOut)
+
+
+@compile
+class CreateTTLPulse(EnvExperiment, Generic[TTLOutCapable]):
+    core: KernelInvariant[Core]
+    loop_in: KernelInvariant[TTLInOut]
+    loop_out: KernelInvariant[TTLOutCapable]
+
     def build(self):
         self.setattr_device("core")
         self.setattr_device("loop_in")
@@ -16,7 +31,7 @@ class CreateTTLPulse(EnvExperiment):
         self.core.reset()
         self.loop_in.input()
         self.loop_out.output()
-        delay(1*us)
+        self.core.delay(1.*us)
         self.loop_out.off()
 
     @kernel
@@ -24,12 +39,15 @@ class CreateTTLPulse(EnvExperiment):
         self.core.break_realtime()
         with parallel:
             with sequential:
-                delay_mu(100)
-                self.loop_out.pulse_mu(1000)
-            self.loop_in.count(self.loop_in.gate_both_mu(1200))
+                delay_mu(int64(100))
+                self.loop_out.pulse_mu(int64(1000))
+            self.loop_in.count(self.loop_in.gate_both_mu(int64(1200)))
 
 
+@compile
 class WriteLog(EnvExperiment):
+    core: KernelInvariant[Core]
+
     def build(self):
         self.setattr_device("core")
 

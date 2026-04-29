@@ -29,12 +29,11 @@ def get_acpki_batcher(description):
     if description["enable_acpki"]:
         if description["target"] == "kasli_soc":
             return """\
-"core_batch" = {
+"core_batch": {
         "type": "local",
         "module": "artiq.coredevice.rtio",
-        "class": "RTIOBatch",
-    }
-            """
+        "class": "RTIOBatch"
+    },"""
         else:
             raise ValueError("ACPKI is supported only on Zynq devices")
     else:
@@ -77,7 +76,7 @@ def process_header(output, description):
                     "ref_period": {ref_period},
                     "analyzer_proxy": "core_analyzer",
                     "target": "{cpu_target}",
-                    "satellite_cpu_targets": {{}}
+                    "satellite_cpu_targets": {{}},
                 }},
             }},
             "core_log": {{
@@ -111,7 +110,6 @@ def process_header(output, description):
                 "class": "CoreDMA"
             }},
             {acpki_batcher}
-
             "i2c_switch0": {{
                 "type": "local",
                 "module": "artiq.coredevice.i2c",
@@ -135,10 +133,12 @@ def process_header(output, description):
 
 
 class PeripheralManager:
-    def __init__(self, output, primary_description):
+    def __init__(self, output, primary_description, master_destination):
         self.counts = defaultdict(int)
+        self.grabber_count = count(0)
         self.output = output
         self.primary_description = primary_description
+        self.master_destination = master_destination
 
     def get_name(self, ty):
         count = self.counts[ty]
@@ -154,36 +154,43 @@ class PeripheralManager:
             "output": "TTLOut",
             "clkgen": "TTLClockGen"
         }
-        classes = [
-            class_names[peripheral["bank_direction_low"]],
-            class_names[peripheral["bank_direction_high"]]
-        ]
+        dios = []
+        if peripheral.get("board", "") != "RJ45_LVDS":
+            for i in range(num_channels):
+                classes = [
+                    class_names[peripheral["bank_direction_low"]],
+                    class_names[peripheral["bank_direction_high"]]
+                ]
+                dios.append((self.get_name("ttl"), classes[i // 4]))
+        else:
+            ch_directions = peripheral["ch_direction_0_3"] + peripheral["ch_direction_4_7"] + peripheral.get("ch_direction_8_11", []) + peripheral.get("ch_direction_12_15", [])
+            for ch_direction in ch_directions:
+                dios.append((self.get_name("ttl"), class_names[ch_direction]))
         channel = count(0)
-        name = [self.get_name("ttl") for _ in range(num_channels)]
-        for i in range(num_channels):
+        for name, class_name in dios:
             self.gen("""
                 device_db["{name}"] = {{
                     "type": "local",
                     "module": "artiq.coredevice.ttl",
                     "class": "{class_name}",
-                    "arguments": {{"channel": 0x{channel:06x}}},
+                    "arguments": {{"channel": 0x{channel:06x}}}
                 }}""",
-                     name=name[i],
-                     class_name=classes[i // 4],
-                     channel=rtio_offset + next(channel))
+                name=name,
+                class_name=class_name,
+                channel=rtio_offset + next(channel))
         if peripheral["edge_counter"]:
-            for i in range(num_channels):
-                class_name = classes[i // 4]
+            for name, class_name in dios:
                 if class_name == "TTLInOut":
                     self.gen("""
                         device_db["{name}_counter"] = {{
                             "type": "local",
                             "module": "artiq.coredevice.edge_counter",
                             "class": "EdgeCounter",
-                            "arguments": {{"channel": 0x{channel:06x}}},
+                            "arguments": {{"channel": 0x{channel:06x}}}
                         }}""",
-                             name=name[i],
-                             channel=rtio_offset + next(channel))
+                        name=name,
+                        class_name=class_name,
+                        channel=rtio_offset + next(channel))
         return next(channel)
 
     def process_dio_spi(self, rtio_offset, peripheral):
@@ -196,14 +203,15 @@ class PeripheralManager:
                             "class": "SPIMaster",
                             "arguments": {{"channel": 0x{channel:06x}}}
                         }}""",
-                     name=self.get_name(spi["name"]),
-                     channel=rtio_offset + next(channel))
-        for ttl in peripheral["ttl"]:
-            ttl_class_names = {
-                "input": "TTLInOut",
-                "output": "TTLOut"
-            }
-            name = self.get_name(ttl["name"])
+                        name=self.get_name(spi["name"]),
+                        channel=rtio_offset + next(channel))
+        dio_config = peripheral.get("dio", {})
+        edge_counter = dio_config.get("edge_counter", False)
+        input_channels = [("TTLInOut", edge_counter) for _ in dio_config.get("input_channels", [])]
+        output_channels = [("TTLOut", False) for _ in dio_config.get("output_channels", [])]
+        clkgen_channels = [("TTLClockGen", False) for _ in dio_config.get("clkgen_channels", [])]
+        for dio_class_name, has_edge_counter in input_channels + output_channels + clkgen_channels:
+            name = self.get_name("ttl")
             self.gen("""
                 device_db["{name}"] = {{
                     "type": "local",
@@ -211,19 +219,19 @@ class PeripheralManager:
                     "class": "{class_name}",
                     "arguments": {{"channel": 0x{channel:06x}}},
                 }}""",
-                     name=name,
-                     class_name=ttl_class_names[ttl["direction"]],
-                     channel=rtio_offset + next(channel))
-            if ttl["edge_counter"]:
+                name=name,
+                class_name=dio_class_name,
+                channel=rtio_offset + next(channel))
+            if has_edge_counter:
                 self.gen("""
                     device_db["{name}_counter"] = {{
                         "type": "local",
-                        "module": "artiq.coredevice.edge_counter",
-                        "class": "EdgeCounter",
-                        "arguments": {{"channel": 0x{channel:06x}}},
+                         "module": "artiq.coredevice.edge_counter",
+                         "class": "EdgeCounter",
+                         "arguments": {{"channel": 0x{channel:06x}}},
                     }}""",
-                         name=name,
-                         channel=rtio_offset + next(channel))
+                    name=name,
+                    channel=rtio_offset + next(channel))
         return next(channel)
 
     def process_urukul(self, rtio_offset, peripheral):
@@ -259,7 +267,7 @@ class PeripheralManager:
             name=urukul_name,
             eem=peripheral["ports"][0],
             busno=busno,
-            dest="" if destination == 0 else "_{}".format(destination),
+            dest="" if destination == self.master_destination else "_{}".format(destination),
             channel=rtio_offset+next(channel))
         if synchronization:
             self.gen("""
@@ -444,34 +452,6 @@ class PeripheralManager:
 
         return next(channel)
 
-    def process_novogorny(self, rtio_offset, peripheral):
-        self.gen("""
-            device_db["spi_{name}_adc"] = {{
-                "type": "local",
-                "module": "artiq.coredevice.spi2",
-                "class": "SPIMaster",
-                "arguments": {{"channel": 0x{adc_channel:06x}}}
-            }}
-            device_db["ttl_{name}_cnv"] = {{
-                "type": "local",
-                "module": "artiq.coredevice.ttl",
-                "class": "TTLOut",
-                "arguments": {{"channel": 0x{cnv_channel:06x}}},
-            }}
-            device_db["{name}"] = {{
-                "type": "local",
-                "module": "artiq.coredevice.novogorny",
-                "class": "Novogorny",
-                "arguments": {{
-                    "spi_adc_device": "spi_{name}_adc",
-                    "cnv_device": "ttl_{name}_cnv"
-                }}
-            }}""",
-            name=self.get_name("novogorny"),
-            adc_channel=rtio_offset,
-            cnv_channel=rtio_offset + 1)
-        return 2
-
     def process_sampler(self, rtio_offset, peripheral):
         self.gen("""
             device_db["spi_{name}_adc"] = {{
@@ -584,7 +564,7 @@ class PeripheralManager:
                 urukul_name=name,
                 eem=eems[0],
                 busno=busno,
-                dest="" if destination == 0 else "_{}".format(destination))
+                dest="" if destination == self.master_destination else "_{}".format(destination))
 
         pll_vco = peripheral.get("pll_vco")
         synchronization = peripheral["synchronization"]
@@ -696,10 +676,11 @@ class PeripheralManager:
                 "type": "local",
                 "module": "artiq.coredevice.grabber",
                 "class": "Grabber",
-                "arguments": {{"channel_base": 0x{channel:06x}}}
+                "arguments": {{"channel_base": 0x{channel:06x}, "index": {index}}}
             }}""",
             name=self.get_name("grabber"),
-            channel=rtio_offset)
+            channel=rtio_offset,
+            index=next(self.grabber_count))
         return 2
 
     def process_fastino(self, rtio_offset, peripheral):
@@ -1066,7 +1047,7 @@ def split_drtio_eem(peripherals):
         list(filter(drtio_eem_filter, peripherals))
 
 
-def process(output, primary_description, satellites):
+def process(output, primary_description, satellites, master_destination):
     drtio_role = primary_description["drtio_role"]
     if drtio_role not in ("standalone", "master"):
         raise ValueError("Invalid primary node DRTIO role")
@@ -1076,12 +1057,12 @@ def process(output, primary_description, satellites):
 
     process_header(output, primary_description)
 
-    pm = PeripheralManager(output, primary_description)
+    pm = PeripheralManager(output, primary_description, master_destination)
 
     local_peripherals, drtio_peripherals = split_drtio_eem(primary_description["peripherals"])
 
     print("# {} peripherals".format(drtio_role), file=output)
-    rtio_offset = 0
+    rtio_offset = master_destination << 16
     for peripheral in local_peripherals:
         n_channels = pm.process(rtio_offset, peripheral)
         rtio_offset += n_channels
@@ -1118,6 +1099,7 @@ def process(output, primary_description, satellites):
                 target=get_cpu_target(description)),
             file=output)
         rtio_offset = destination << 16
+        pm.grabber_count = count(0)
         for peripheral in peripherals:
             n_channels = pm.process(rtio_offset, peripheral)
             rtio_offset += n_channels
@@ -1162,6 +1144,8 @@ def get_argparser():
                         default=[], metavar=("DESTINATION", "DESCRIPTION"), type=str,
                         help="add DRTIO satellite at the given destination number with "
                              "devices from the given JSON description")
+    parser.add_argument("-m", "--master-destination", default=0, type=int,
+                        help="master destination number - must be provided if not using the default 0")
     return parser
 
 
@@ -1177,9 +1161,9 @@ def main():
 
     if args.output is not None:
         with open(args.output, "w") as f:
-            process(f, primary_description, satellites)
+            process(f, primary_description, satellites, args.master_destination)
     else:
-        process(sys.stdout, primary_description, satellites)
+        process(sys.stdout, primary_description, satellites, args.master_destination)
 
 
 if __name__ == "__main__":

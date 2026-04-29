@@ -8,31 +8,64 @@ def peripheral_dio(module, peripheral, **kwargs):
         "output": ttl_serdes_7series.Output_8X,
         "clkgen": ttl_simple.ClockGen
     }
-    if len(peripheral["ports"]) != 1:
-        raise ValueError("wrong number of ports")
     if peripheral["edge_counter"]:
         edge_counter_cls = edge_counter.SimpleEdgeCounter
     else:
         edge_counter_cls = None
-    eem.DIO.add_std(module, peripheral["ports"][0],
-        ttl_classes[peripheral["bank_direction_low"]],
-        ttl_classes[peripheral["bank_direction_high"]],
-        edge_counter_cls=edge_counter_cls, **kwargs)
+    has_second_port = len(peripheral["ports"]) == 2
+    if peripheral.get("board", "") != "RJ45_LVDS":
+        if has_second_port:
+            raise ValueError("wrong number of ports")
+        eem.DIO.add_std(module,
+                        peripheral["ports"][0],
+                        ttl_classes[peripheral["bank_direction_low"]],
+                        ttl_classes[peripheral["bank_direction_high"]],
+                        edge_counter_cls = edge_counter_cls,
+                        **kwargs)
+    else:
+        dio_directions = peripheral["ch_direction_0_3"] + peripheral["ch_direction_4_7"] + peripheral.get("ch_direction_8_11", []) + peripheral.get("ch_direction_12_15", [])
+        dio_cls_list = [ttl_classes[name] for name in dio_directions]
+        eem.DIO.add_rj45_lvds(module,
+                              peripheral["ports"][0],
+                              peripheral["ports"][1] if has_second_port else None,
+                              dio_cls_list,
+                              edge_counter_cls = edge_counter_cls,
+                              **kwargs)
 
 
 def peripheral_dio_spi(module, peripheral, **kwargs):
-    ttl_classes = {
-        "input": ttl_serdes_7series.InOut_8X,
-        "output": ttl_serdes_7series.Output_8X
-    }
-    if len(peripheral["ports"]) != 1:
-        raise ValueError("peripheral dio_spi must be assigned one port")
+    if peripheral.get("board", "") != "RJ45_LVDS" and len(peripheral["ports"]) != 1:
+        raise ValueError("wrong number of ports")
+    defined_channels = []
     spi = [(s["clk"], s.get("mosi"), s.get("miso"), s.get("cs", []))
            for s in peripheral["spi"]]
-    ttl = [(t["pin"], ttl_classes[t["direction"]],
-            edge_counter.SimpleEdgeCounter if t.get("edge_counter") else None)
-           for t in peripheral["ttl"]]
-    eem.DIO_SPI.add_std(module, peripheral["ports"][0], spi, ttl, **kwargs)
+    for clk, mosi, miso, cs in spi:
+        defined_channels.append(clk)
+        if mosi is not None:
+            defined_channels.append(mosi)
+        if miso is not None:
+            defined_channels.append(miso)
+        defined_channels.extend(cs)
+
+    dio_config = peripheral.get("dio", {})
+    if dio_config.get("edge_counter", False):
+        edge_counter_cls = edge_counter.SimpleEdgeCounter
+    else:
+        edge_counter_cls = None
+    input_channels = [(pin, ttl_serdes_7series.InOut_8X, edge_counter_cls) for pin in dio_config.get("input_channels", [])]
+    output_channels = [(pin, ttl_serdes_7series.Output_8X, None) for pin in dio_config.get("output_channels", [])]
+    clkgen_channels = [(pin, ttl_simple.ClockGen, None) for pin in dio_config.get("clkgen_channels", [])]
+    defined_channels.extend([ch for ch, _, _ in input_channels + output_channels + clkgen_channels])
+
+    for channel in range(8 * len(peripheral["ports"])):
+        if channel not in defined_channels:
+            raise ValueError("missing dio channel: ch{}, dio_spi on EEM{}".format(channel, peripheral["ports"][0]))
+    eem.DIO_SPI.add_std(module,
+                        peripheral["ports"][0],
+                        peripheral["ports"][1] if len(peripheral["ports"]) == 2 else None,
+                        spi,
+                        input_channels + output_channels + clkgen_channels,
+                        **kwargs)
 
 
 def peripheral_urukul(module, peripheral, **kwargs):
@@ -48,13 +81,6 @@ def peripheral_urukul(module, peripheral, **kwargs):
         sync_gen_cls = None
     eem.Urukul.add_std(module, port, port_aux, ttl_serdes_7series.Output_8X,
         peripheral["dds"], peripheral["proto_rev"], sync_gen_cls, **kwargs)
-
-
-def peripheral_novogorny(module, peripheral, **kwargs):
-    if len(peripheral["ports"]) != 1:
-        raise ValueError("wrong number of ports")
-    eem.Novogorny.add_std(module, peripheral["ports"][0],
-        ttl_serdes_7series.Output_8X, **kwargs)
 
 
 def peripheral_sampler(module, peripheral, **kwargs):
@@ -165,7 +191,6 @@ peripheral_processors = {
     "dio": peripheral_dio,
     "dio_spi": peripheral_dio_spi,
     "urukul": peripheral_urukul,
-    "novogorny": peripheral_novogorny,
     "sampler": peripheral_sampler,
     "suservo": peripheral_suservo,
     "zotino": peripheral_zotino,

@@ -161,6 +161,11 @@ pub enum Packet {
     CXPROIViewerDataRequest { destination: u8 },
     CXPROIViewerPixelDataReply { length: u16, data: [u64; CXP_PAYLOAD_MAX_SIZE_U64] },
     CXPROIViewerFrameDataReply { width: u16, height: u16, pixel_code: u16 },
+
+    GrabberUartReadRequest { destination: u8, g: u8 },
+    GrabberUartReadReply { succeeded: bool, data: u8 },
+    GrabberUartWriteRequest { destination: u8, g: u8, data: u8 },
+    GrabberUartWriteReply { succeeded: bool },
 }
 
 impl Packet {
@@ -586,6 +591,23 @@ impl Packet {
                 width: reader.read_u16()?,
                 height: reader.read_u16()?,
                 pixel_code: reader.read_u16()?,
+            },
+
+            0xeb => Packet::GrabberUartReadRequest {
+                destination: reader.read_u8()?,
+                g: reader.read_u8()?,
+            },
+            0xec => Packet::GrabberUartReadReply {
+                succeeded: reader.read_bool()?,
+                data: reader.read_u8()?
+            },
+            0xed => Packet::GrabberUartWriteRequest {
+                destination: reader.read_u8()?,
+                g: reader.read_u8()?,
+                data: reader.read_u8()?
+            },
+            0xee => Packet::GrabberUartWriteReply {
+                succeeded: reader.read_bool()?
             },
 
             ty => return Err(Error::UnknownPacket(ty))
@@ -1041,6 +1063,26 @@ impl Packet {
                 writer.write_u16(width)?;
                 writer.write_u16(height)?;
                 writer.write_u16(pixel_code)?;
+            }
+            Packet::GrabberUartReadRequest { destination, g } => {
+                writer.write_u8(0xeb)?;
+                writer.write_u8(destination)?;
+                writer.write_u8(g)?;
+            }
+            Packet::GrabberUartReadReply { succeeded, data } => {
+                writer.write_u8(0xec)?;
+                writer.write_bool(succeeded)?;
+                writer.write_u8(data)?;
+            }
+            Packet::GrabberUartWriteRequest { destination, g, data } => {
+                writer.write_u8(0xed)?;
+                writer.write_u8(destination)?;
+                writer.write_u8(g)?;
+                writer.write_u8(data)?;
+            }
+            Packet::GrabberUartWriteReply { succeeded } => {
+                writer.write_u8(0xee)?;
+                writer.write_bool(succeeded)?;
             }
         }
         Ok(())

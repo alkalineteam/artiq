@@ -3,8 +3,17 @@
 Release notes
 =============
 
-ARTIQ-9 (Unreleased)
---------------------
+ARTIQ-10 (Unreleased)
+---------------------
+
+* NAC3 compiler.
+* Multi-channel CoaXPress support.
+* Conda packaging is no longer supported.
+* Novogorny (the ancestor of Sampler) is no longer supported.
+* The deprecated "base" field of JSON system descriptions has been removed. Use "drtio_role" instead.
+
+ARTIQ-9
+-------
 
 * Hardware support:
    - 12Gbps CoaXPress grabber support on Kasli-SoC with CoaXPress-SFP adapter
@@ -37,6 +46,7 @@ ARTIQ-9 (Unreleased)
      higher throughput, with lower overhead than DMA recording.
    - On Zynq platforms, the overhead for switching between normal operation and DMA recording 
      context is now lower by an order of magnitude.
+   - CameraLink Grabber serial support.
 * Dashboard:
    - Experiment windows can have different colors, selected by the user.
    - The Log pane now adapts to dark system color themes.
@@ -84,14 +94,13 @@ Breaking changes:
 * ``artiq_flash``: the syntax is different when operating on partial regions of the flash. See the example below.
   The new syntax also allows erasing partial regions. Backward compatibility is retained when erasing and 
   flashing all regions.
-* Urukul's AD9910 and AD9912 ``pll_n`` argument is now automatically calculated based on the reference clock frequency.
-  This argument in device databases is now invalid and must be removed.
-
-::
+  ::
 
   # Erase the storage flash region, flash the gateware and firmware but not bootloader and then restart the FPGA device
   artiq_flash erase=storage write=gateware,firmware start -d ./artiq_kasli/master/ --srcbuild
 
+* Urukul's AD9910 and AD9912 ``pll_n`` argument is now automatically calculated based on the reference clock frequency.
+  This argument in device databases is now invalid and must be removed.
 * Experimental features have been removed.
 * SU-Servo coefficient memory have been remapped. Users should re-interpret the record written by Channel.get_profile_mu().
 * ``device_db.py`` now requires all device DB keys to be valid Python identifiers ``[A-Za-z0-9_]``; no special characters (except underscore) are allowed.

@@ -1,29 +1,49 @@
 from numpy import int32, int64
 
 from artiq.language.core import *
-from artiq.language.types import *
+from artiq.coredevice.exceptions import GrabberSerialError
 from artiq.coredevice.rtio import rtio_output, rtio_input_timestamped_data
+from artiq.coredevice.core import Core
 
 
+@extern
+def grabber_read(destination: int32, id: int32) -> int32:
+    raise NotImplementedError("syscall not simulated")
+
+
+@extern
+def grabber_write(destination: int32, id: int32, data: int32):
+    raise NotImplementedError("syscall not simulated")
+
+
+@compile
 class OutOfSyncException(Exception):
     """Raised when an incorrect number of ROI engine outputs has been
     retrieved from the RTIO input FIFO."""
     pass
 
 
+@compile
 class GrabberTimeoutException(Exception):
     """Raised when a timeout occurs while attempting to read Grabber RTIO input events."""
     pass
 
 
+@compile
 class Grabber:
     """Driver for the Grabber camera interface."""
-    kernel_invariants = {"core", "channel_base", "sentinel"}
+    core: KernelInvariant[Core]
+    channel_base: KernelInvariant[int32]
+    drtio_destination: KernelInvariant[int32]
+    index: KernelInvariant[int32]
+    sentinel: KernelInvariant[int32]
 
     def __init__(self, dmgr, channel_base, res_width=12, count_shift=0,
-                 core_device="core"):
+                 core_device="core", index=0):
         self.core = dmgr.get(core_device)
         self.channel_base = channel_base
+        self.drtio_destination = channel_base >> 16
+        self.index = index
 
         count_width = min(31, 2*res_width + 16 - count_shift)
         # This value is inserted by the gateware to mark the start of a series of
@@ -35,7 +55,7 @@ class Grabber:
         return [(channel_base, "ROI coordinates"), (channel_base + 1, "ROI mask")]
 
     @kernel
-    def setup_roi(self, n, x0, y0, x1, y1):
+    def setup_roi(self, n: int32, x0: int32, y0: int32, x1: int32, y1: int32):
         """
         Defines the coordinates of a ROI.
 
@@ -59,7 +79,7 @@ class Grabber:
         delay_mu(c)
 
     @kernel
-    def gate_roi(self, mask):
+    def gate_roi(self, mask: int32):
         """
         Defines which ROI engines produce input events.
 
@@ -79,15 +99,15 @@ class Grabber:
         rtio_output((self.channel_base + 1) << 8, mask)
 
     @kernel
-    def gate_roi_pulse(self, mask, dt):
+    def gate_roi_pulse(self, mask: int32, dt: float):
         """Sets a temporary mask for the specified duration (in seconds), before
         disabling all ROI engines."""
         self.gate_roi(mask)
-        delay(dt)
+        self.core.delay(dt)
         self.gate_roi(0)
 
     @kernel
-    def input_mu(self, data, timeout_mu=-1):
+    def input_mu(self, data: list[int32], timeout_mu: int64 = int64(-1)):
         """
         Retrieves the accumulated values for one frame from the ROI engines.
         Blocks until values are available or timeout is reached.
@@ -110,7 +130,7 @@ class Grabber:
         channel = self.channel_base + 1
 
         timestamp, sentinel = rtio_input_timestamped_data(timeout_mu, channel)
-        if timestamp == -1:
+        if timestamp == int64(-1):
             raise GrabberTimeoutException("Timeout before Grabber frame available")
         if sentinel != self.sentinel:
             raise OutOfSyncException
@@ -119,7 +139,23 @@ class Grabber:
             timestamp, roi_output = rtio_input_timestamped_data(timeout_mu, channel)
             if roi_output == self.sentinel:
                 raise OutOfSyncException
-            if timestamp == -1:
+            if timestamp == int64(-1):
                 raise GrabberTimeoutException(
                     "Timeout retrieving ROIs (attempting to read more ROIs than enabled?)")
             data[i] = roi_output
+
+    @kernel
+    def write_serial(self, data: int32):
+        grabber_write(self.drtio_destination, self.index, data)
+
+    @kernel
+    def read_serial(self) -> int32:
+        return grabber_read(self.drtio_destination, self.index)
+
+    @kernel
+    def flush_serial(self):
+        while True:
+            try:
+                self.read_serial()
+            except GrabberSerialError:
+                break

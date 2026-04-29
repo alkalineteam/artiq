@@ -530,7 +530,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 kern_acknowledge()
             }
             &kern::DmaRecordStop { duration, enable_ddma } => {
-                let _id = session.congress.dma_manager.record_stop(duration, enable_ddma, io, ddma_mutex)?;
+                let _id = session.congress.dma_manager.record_stop(duration, enable_ddma, io, ddma_mutex, routing_table)?;
                 #[cfg(has_drtio)]
                 if enable_ddma {
                     remote_dma::upload_traces(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, _id)?;
@@ -785,7 +785,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 address,
                 length,
             } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 loop {
                     let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                         &Packet::CXPReadRequest {
@@ -805,7 +805,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                         }
                         Ok(packet) => {
                             error!("received unexpected aux packet {:?}", packet);
-                            break kern_send(io, &kern::CXPError("recevied unexpected drtio aux reply"));
+                            break kern_send(io, &kern::CXPError("received unexpected drtio aux reply"));
                         }
                         Err(e) => {
                             error!("aux packet error ({})", e);
@@ -820,7 +820,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 address,
                 value,
             } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 loop {
                     let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                         &Packet::CXPWrite32Request {
@@ -839,7 +839,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                         }
                         Ok(packet) => {
                             error!("received unexpected aux packet {:?}", packet);
-                            break kern_send(io, &kern::CXPError("recevied unexpected drtio aux reply"));
+                            break kern_send(io, &kern::CXPError("received unexpected drtio aux reply"));
                         }
                         Err(e) => {
                             error!("aux packet error ({})", e);
@@ -856,7 +856,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 x1,
                 y1,
             } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                     &Packet::CXPROIViewerSetupRequest {
                         destination: *destination,
@@ -871,7 +871,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                     Ok(Packet::CXPROIViewerSetupReply) => kern::CXPROIViewerSetupReply,
                     Ok(packet) => {
                         error!("received unexpected aux packet {:?}", packet);
-                        kern::CXPError("recevied unexpected drtio aux reply")
+                        kern::CXPError("received unexpected drtio aux reply")
                     }
                     Err(e) => {
                         error!("aux packet error ({})", e);
@@ -882,7 +882,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
             }
             #[cfg(has_drtio)]
             kern::CXPROIViewerDataRequest { destination } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 let reply = loop {
                     let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                         &Packet::CXPROIViewerDataRequest { destination: *destination },
@@ -906,7 +906,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                         }
                         Ok(packet) => {
                             error!("received unexpected aux packet {:?}", packet);
-                            break kern::CXPError("recevied unexpected drtio aux reply");
+                            break kern::CXPError("received unexpected drtio aux reply");
                         }
                         Err(e) => {
                             error!("aux packet error ({})", e);
@@ -916,6 +916,87 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 };
                 kern_send(io,&reply)
                 }
+
+            #[cfg(any(has_grabber, has_drtio))]
+            &kern::GrabberUartReadRequest { destination: _destination, g } => {
+                let mut reply = kern::GrabberUartReadReply { succeeded: false, data: 0};
+
+                #[cfg(has_drtio)]
+                let hop = routing_table.get_hop(_destination, 0);
+
+                #[cfg(not(has_drtio))]
+                let hop = 0;
+
+                #[cfg(has_drtio)]
+                if hop != 0 {
+                    let linkno = hop - 1;
+                    let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
+                        &Packet::GrabberUartReadRequest { destination: _destination, g }
+                    );
+                    match drtioaux_packet {
+                        Ok(Packet::GrabberUartReadReply { succeeded, data }) => {
+                            reply = kern::GrabberUartReadReply { succeeded, data };
+                        }
+                        Ok(packet) => {
+                            error!("received unexpected aux packet {:?}", packet);
+                        }
+                        Err(e) => {
+                            error!("aux packet error ({})", e);
+                        }
+                    }
+                };
+                #[cfg(has_grabber)]
+                if hop == 0 {
+                    if let Ok(data) = board_artiq::grabber::uart::read(g) {
+                        reply = kern::GrabberUartReadReply { succeeded: true, data };
+                    }
+                }
+                kern_send(io, &reply)
+            }
+
+            #[cfg(any(has_grabber, has_drtio))]
+            &kern::GrabberUartWriteRequest { destination: _destination, g, data } => {
+                let mut reply = kern::GrabberUartWriteReply { succeeded: false };
+
+                #[cfg(has_drtio)]
+                let hop = routing_table.get_hop(_destination, 0);
+
+                #[cfg(not(has_drtio))]
+                let hop = 0;
+
+                #[cfg(has_drtio)]
+                if hop != 0 {
+                    let linkno = hop - 1;
+                    let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
+                        &Packet::GrabberUartWriteRequest { destination: _destination, g, data }
+                    );
+                    match drtioaux_packet {
+                        Ok(Packet::GrabberUartWriteReply { succeeded }) => {
+                            if succeeded {
+                                reply = kern::GrabberUartWriteReply { succeeded }
+                            } else {
+                                error!("remote uart write failed");
+                            }
+                        }
+                        Ok(packet) => {
+                            error!("received unexpected aux packet {:?}", packet);
+                        }
+                        Err(e) => {
+                            error!("aux packet error ({})", e);
+                        }
+                    }
+                }
+                #[cfg(has_grabber)]
+                if hop == 0 {
+                    if board_artiq::grabber::uart::write(g, data).is_ok() {
+                        reply = kern::GrabberUartWriteReply { succeeded: true };
+                    } else {
+                        error!("uart write failed, tx buffer is full");
+                    };
+                };
+                kern_send(io, &reply)
+            }
+
             request => unexpected!("unexpected request {:?} from kernel CPU", request)
         }.and(Ok(false))
     })

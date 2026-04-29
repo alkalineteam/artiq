@@ -2,29 +2,32 @@
   description = "A leading-edge control system for quantum information experiments";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nac3 = {
+      url = "https://git.m-labs.hk/M-Labs/nac3.git";
+      type = "git";
+    };
 
     rust-overlay = {
       url = "github:oxalica/rust-overlay?ref=snapshot/2024-08-01";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nac3/nixpkgs";
     };
 
     naersk = {
       url = "github:nix-community/naersk";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nac3/nixpkgs";
     };
 
     artiq-comtools = {
       url = "https://git.m-labs.hk/M-Labs/artiq-comtools.git";
       type = "git";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nac3/nixpkgs";
       inputs.sipyco.follows = "sipyco";
     };
 
     sipyco = {
       url = "https://git.m-labs.hk/M-Labs/sipyco.git";
       type = "git";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nac3/nixpkgs";
     };
 
     src-migen = {
@@ -39,38 +42,31 @@
       submodules = true;
       flake = false;
     };
-
-    src-pythonparser = {
-      url = "https://git.m-labs.hk/M-Labs/pythonparser.git";
-      type = "git";
-      flake = false;
-    };
   };
 
   outputs = {
     self,
-    nixpkgs,
     rust-overlay,
     naersk,
     sipyco,
-    src-pythonparser,
+    nac3,
     artiq-comtools,
     src-migen,
     src-misoc,
   }: let
-    pkgs' = import nixpkgs { system = "x86_64-linux"; };
+    pkgs' = import nac3.inputs.nixpkgs { system = "x86_64-linux"; };
     rust-overlay-patched = pkgs'.applyPatches {
       name = "rust-overlay-patched";
       src = rust-overlay;
       patches = [ ./fix-rust-overlay-unpack.diff ];
     };
-    pkgs = import nixpkgs {
+    pkgs = import nac3.inputs.nixpkgs {
       system = "x86_64-linux";
       overlays = [(import rust-overlay-patched)];
     };
-    pkgs-aarch64 = import nixpkgs {system = "aarch64-linux";};
+    pkgs-aarch64 = import nac3.inputs.nixpkgs {system = "aarch64-linux";};
 
-    artiqVersionMajor = 9;
+    artiqVersionMajor = 10;
     artiqVersionMinor = self.sourceInfo.revCount or 0;
     artiqVersionId = self.sourceInfo.shortRev or "unknown";
     artiqVersion = (builtins.toString artiqVersionMajor) + "." + (builtins.toString artiqVersionMinor) + "+" + artiqVersionId + ".beta";
@@ -106,44 +102,16 @@
         (ncurses'.override {unicodeSupport = false;})
         zlib
         libuuid
-        xorg.libSM
-        xorg.libICE
-        xorg.libXrender
-        xorg.libX11
-        xorg.libXext
-        xorg.libXtst
-        xorg.libXi
+        libsm
+        libice
+        libxrender
+        libx11
+        libxext
+        libxtst
+        libxi
         freetype
         fontconfig
       ];
-
-    pythonparser = pkgs.python3Packages.buildPythonPackage {
-      pname = "pythonparser";
-      version = "1.4";
-      src = src-pythonparser;
-      pyproject = true;
-      build-system = [pkgs.python3Packages.setuptools];
-      doCheck = false;
-      propagatedBuildInputs = with pkgs.python3Packages; [regex];
-    };
-
-    libartiq-support = pkgs.stdenv.mkDerivation {
-      name = "libartiq-support";
-      src = self;
-      buildInputs = [rust];
-      buildPhase = ''
-        rustc $src/artiq/test/libartiq_support/lib.rs -Cpanic=unwind -g
-      '';
-      installPhase = ''
-        mkdir -p $out/lib $out/bin
-        cp libartiq_support.so $out/lib
-        cat > $out/bin/libartiq-support << EOF
-        #!/bin/sh
-        echo $out/lib/libartiq_support.so
-        EOF
-        chmod 755 $out/bin/libartiq-support
-      '';
-    };
 
     artiq = pkgs.python3Packages.buildPythonPackage rec {
       pname = "artiq";
@@ -158,9 +126,10 @@
       '';
 
       nativeBuildInputs = [pkgs.qt6.wrapQtAppsHook];
+
       propagatedBuildInputs =
-        [pkgs.llvm_20 pkgs.lld_20 sipyco.packages.x86_64-linux.sipyco pythonparser pkgs.qt6.qtsvg artiq-comtools.packages.x86_64-linux.artiq-comtools]
-        ++ (with pkgs.python3Packages; [llvmlite pyqtgraph pygit2 numpy python-dateutil scipy prettytable pyserial levenshtein h5py pyqt6 (qasync.override { pyqt5 = pyqt6; }) tqdm lmdb jsonschema platformdirs]);
+        [nac3.packages.x86_64-linux.nac3artiq-pgo sipyco.packages.x86_64-linux.sipyco pkgs.qt6.qtsvg artiq-comtools.packages.x86_64-linux.artiq-comtools]
+        ++ (with pkgs.python3Packages; [pyqtgraph pygit2 numpy python-dateutil scipy prettytable pyserial h5py pyqt6 qasync tqdm lmdb jsonschema platformdirs]);
 
       dontWrapQtApps = true;
       postFixup = ''
@@ -181,16 +150,11 @@
         "--set FONTCONFIG_FILE ${pkgs.fontconfig.out}/etc/fonts/fonts.conf"
       ];
 
-      # FIXME: automatically propagate lld_20 llvm_20 dependencies
       # cacert is required in the check stage only, as certificates are to be
       # obtained from system elsewhere
-      nativeCheckInputs = with pkgs; [lld_20 llvm_20 lit outputcheck cacert] ++ [libartiq-support];
+      nativeCheckInputs = [pkgs.cacert];
       checkPhase = ''
         python -m unittest discover -v artiq.test
-
-        TESTDIR=`mktemp -d`
-        cp --no-preserve=mode,ownership -R $src/artiq/test/lit $TESTDIR
-        LIBARTIQ_SUPPORT=`libartiq-support` lit -v $TESTDIR/lit
       '';
     };
 
@@ -271,9 +235,9 @@
         nativeBuildInputs = [
           (pkgs.python3.withPackages (ps: [migen misoc artiq-build ps.packaging]))
           rust
+          pkgs.llvmPackages_20.clang-unwrapped
           pkgs.llvm_20
           pkgs.lld_20
-          pkgs.llvmPackages_20.clang-unwrapped
           vivado
         ];
         overrideMain = _: {
@@ -370,8 +334,9 @@
         done
       '';
   in rec {
-    packages.x86_64-linux = {
-      inherit pythonparser artiq artiq-build;
+    packages.x86_64-linux = rec {
+      inherit (nac3.packages.x86_64-linux) python3-mimalloc;
+      inherit artiq artiq-build;
       inherit migen misoc asyncserial microscope vivadoEnv vivado;
       openocd-bscanspi = openocd-bscanspi-f pkgs;
       artiq-board-kc705-nist_clock = makeArtiqBoardPackage {
@@ -454,7 +419,7 @@
 
     inherit qtPaths makeArtiqBoardPackage openocd-bscanspi-f;
 
-    packages.x86_64-linux.default = pkgs.python3.withPackages (_: [packages.x86_64-linux.artiq]);
+    defaultPackage.x86_64-linux = packages.x86_64-linux.python3-mimalloc.withPackages (_: [packages.x86_64-linux.artiq]);
 
     formatter.x86_64-linux = pkgs.alejandra;
 
@@ -468,12 +433,10 @@
         packages = with pkgs;
           [
             git
-            lit
+            pdf2svg
             lld_20
             llvm_20
             llvmPackages_20.clang-unwrapped
-            outputcheck
-            pdf2svg
 
             python3Packages.sphinx
             python3Packages.sphinx-argparse
@@ -481,15 +444,12 @@
             python3Packages.sphinxcontrib-wavedrom
             python3Packages.sphinx-rtd-theme
 
-            (python3.withPackages (ps: [migen misoc microscope ps.packaging ps.paramiko] ++ artiq.propagatedBuildInputs))
+            (packages.x86_64-linux.python3-mimalloc.withPackages (ps: [migen misoc microscope ps.packaging ps.paramiko] ++ artiq.propagatedBuildInputs))
           ]
           ++ [
-            rust
             latex-artiq-manual
+            rust
             artiq-frontend-dev-wrappers
-
-            # To manually run compiler tests:
-            libartiq-support
 
             # use the vivado-env command to enter a FHS shell that lets you run the Vivado installer
             packages.x86_64-linux.vivadoEnv
@@ -497,7 +457,6 @@
             packages.x86_64-linux.openocd-bscanspi
           ];
         shellHook = ''
-          export LIBARTIQ_SUPPORT=`libartiq-support`
           export QT_PLUGIN_PATH=${qtPaths.QT_PLUGIN_PATH}
           export QML2_IMPORT_PATH=${qtPaths.QML2_IMPORT_PATH}
           artiq_root=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -518,7 +477,6 @@
         name = "artiq-boards-shell";
         packages = [
           rust
-
           pkgs.llvm_20
           pkgs.lld_20
           pkgs.llvmPackages_20.clang-unwrapped
@@ -537,6 +495,7 @@
 
     hydraJobs = {
       inherit (packages.x86_64-linux) artiq artiq-board-kc705-nist_clock artiq-board-efc-shuttler artiq-board-efc-songbird artiq-board-phaser-mtdds openocd-bscanspi;
+      inherit (packages.x86_64-linux) artiq-manual-html artiq-manual-pdf;
       gateware-sim = pkgs.stdenvNoCC.mkDerivation {
         name = "gateware-sim";
         buildInputs = [
@@ -565,8 +524,6 @@
                 ]
                 ++ ps.paramiko.optional-dependencies.ed25519
           ))
-          pkgs.llvm_20
-          pkgs.lld_20
           pkgs.openssh
           packages.x86_64-linux.openocd-bscanspi # for the bscanspi bitstreams
         ];
@@ -606,12 +563,12 @@
             sleep 30
 
             python -m unittest discover -v artiq.test.coredevice
+            NAC3_OPT_LEVEL=0 python -m unittest discover -v artiq.test.coredevice
           )
 
           touch $out
         '';
       };
-      inherit (packages.x86_64-linux) artiq-manual-html artiq-manual-pdf;
     };
   };
 
