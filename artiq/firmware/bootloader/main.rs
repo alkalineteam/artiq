@@ -1,14 +1,14 @@
 #![no_std]
-#![feature(panic_info_message)]
 
-extern crate crc;
+use core::{convert::TryFrom, panic::PanicInfo, ptr, slice};
+
 extern crate byteorder;
+extern crate crc;
 extern crate smoltcp;
 #[macro_use]
 extern crate board_misoc;
 extern crate riscv;
 
-use core::{ptr, slice, convert::TryFrom};
 use crc::crc32;
 use byteorder::{ByteOrder, LittleEndian};
 use board_misoc::{ident, cache, sdram, config, boot, mem as board_mem};
@@ -24,7 +24,7 @@ use smoltcp::iface::{Routes, SocketStorage};
 use smoltcp::wire::{HardwareAddress, IpAddress, Ipv4Address, Ipv6Address};
 
 fn check_integrity() -> bool {
-    extern {
+    extern "C" {
         static _begin: u8;
         static _end: u8;
         static _crc: u32;
@@ -491,7 +491,7 @@ fn network_boot() {
 }
 
 #[no_mangle]
-pub extern fn main() -> i32 {
+pub extern "C" fn main() -> i32 {
     println!("");
     println!(r" __  __ _ ____         ____ ");
     println!(r"|  \/  (_) ___|  ___  / ___|");
@@ -526,7 +526,7 @@ pub extern fn main() -> i32 {
 }
 
 #[no_mangle]
-pub extern fn exception(_regs: *const u32) {
+pub extern "C" fn exception(_regs: *const u32) {
     let pc = mepc::read();
     let cause = mcause::read().cause();
     let mtval = mtval::read();
@@ -534,14 +534,13 @@ pub extern fn exception(_regs: *const u32) {
 }
 
 #[no_mangle]
-pub extern fn abort() {
+pub extern "C" fn abort() {
     println!("aborted");
     loop {}
 }
 
-#[no_mangle] // https://github.com/rust-lang/rust/issues/{38281,51647}
 #[panic_handler]
-pub fn panic_fmt(info: &core::panic::PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
     #[cfg(has_error_led)]
     unsafe {
         board_misoc::csr::error_led::out_write(1);
@@ -552,10 +551,11 @@ pub fn panic_fmt(info: &core::panic::PanicInfo) -> ! {
     } else {
         print!("panic at unknown location");
     }
-    if let Some(message) = info.message() {
-        println!(": {}", message);
-    } else {
+    let message = info.message();
+    if message.as_str().map(|s| s.is_empty()).unwrap_or_default() {
         println!("");
+    } else {
+        println!(": {}", message);
     }
     loop {}
 }

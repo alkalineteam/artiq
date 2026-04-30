@@ -1,4 +1,3 @@
-#![feature(libc, panic_unwind)]
 #![no_std]
 
 extern crate unwind;
@@ -17,9 +16,12 @@ pub fn backtrace<F>(f: F) -> Result<(), uw::_Unwind_Reason_Code>
         prev_sp: uw::_Unwind_Word
     }
 
-    extern fn trace<F>(context: *mut uw::_Unwind_Context, arg: *mut c_void)
-                      -> uw::_Unwind_Reason_Code
-        where F: FnMut(usize) -> ()
+    extern "C" fn trace<F>(
+        context: *mut uw::_Unwind_Context,
+        arg: *mut c_void,
+    ) -> uw::_Unwind_Reason_Code
+    where
+        F: FnMut(usize) -> (),
     {
         unsafe {
             let trace_context = &mut *(arg as *mut TraceContext<F>);

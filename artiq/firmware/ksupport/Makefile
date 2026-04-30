@@ -18,7 +18,8 @@ all:: ksupport.elf
 
 .PHONY: $(RUSTOUT)/libksupport.a
 $(RUSTOUT)/libksupport.a:
-	$(cargo) --target-dir ./cargo \
+	$(cargo) -Z json-target-spec \
+	--target-dir ./cargo \
 	--manifest-path $(KSUPPORT_DIRECTORY)/Cargo.toml \
 	--target $(KSUPPORT_DIRECTORY)/../$(CARGO_TRIPLE).json
 

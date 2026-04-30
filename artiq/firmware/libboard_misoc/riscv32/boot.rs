@@ -1,3 +1,5 @@
+use core::arch::asm;
+
 use super::{cache, pmp};
 use riscv::register::*;
 

@@ -7,7 +7,8 @@ all:: bootloader.bin
 
 .PHONY: $(RUSTOUT)/libbootloader.a
 $(RUSTOUT)/libbootloader.a:
-	$(cargo) --target-dir ./cargo \
+	$(cargo) -Z json-target-spec \
+	--target-dir ./cargo \
 	--manifest-path $(BOOTLOADER_DIRECTORY)/Cargo.toml \
 	--target $(BOOTLOADER_DIRECTORY)/../$(CARGO_TRIPLE).json
 

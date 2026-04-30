@@ -157,16 +157,15 @@
         ]
       },
       "locked": {
-        "lastModified": 1719454714,
-        "narHash": "sha256-MojqG0lyUINkEk0b3kM2drsU5vyaF8DFZe/FAlZVOGs=",
+        "lastModified": 1777432579,
+        "narHash": "sha256-Ce11TStDsqCge2vAAfLKe2+4lDI5cSX5ZYZOuKJBKKQ=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "d1c527659cf076ecc4b96a91c702d080b213801e",
+        "rev": "3ecb5e6ab380ced3272ef7fcfe398bffbcc0f152",
         "type": "github"
       },
       "original": {
         "owner": "oxalica",
-        "ref": "snapshot/2024-08-01",
         "repo": "rust-overlay",
         "type": "github"
       }
@@ -211,11 +210,11 @@
     "src-misoc": {
       "flake": false,
       "locked": {
-        "lastModified": 1765867404,
-        "narHash": "sha256-YPYUHVIryXDp4W2hUtHUtBbRKIrbhInWImT0NKaacSY=",
+        "lastModified": 1778162016,
+        "narHash": "sha256-biMabKizWjfU+5HnL6m2xdlkY/HGND+vyDjc2d06dj8=",
         "ref": "refs/heads/master",
-        "rev": "7ab412de11f6533cd68cd818924da5c28a484ccd",
-        "revCount": 2509,
+        "rev": "7857762a1bbe345592c927e5c6d8ebe48fd9811e",
+        "revCount": 2510,
         "submodules": true,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/misoc.git"
