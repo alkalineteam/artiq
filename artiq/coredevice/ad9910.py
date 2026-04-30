@@ -347,7 +347,7 @@ class AD9910(Generic[IoUpdateT]):
         """Write to 64-bit register.
 
         :param addr: Register address
-        :param data_high: High (MSB) 32 data bits 
+        :param data_high: High (MSB) 32 data bits
         :param data_low: Low (LSB) 32 data bits
         """
         self.bus.set_config_mu(SPI_CONFIG, 8,
@@ -388,7 +388,7 @@ class AD9910(Generic[IoUpdateT]):
 
         The profile to read from and the step, start, and end address
         need to be configured before and separately using
-        :meth:`set_profile_ram` and the parent CPLD 
+        :meth:`set_profile_ram` and the parent CPLD
         :meth:`~artiq.coredevice.urukul.ProtoRev9.set_profile`.
 
         :param data: List to be filled with data read from RAM.
@@ -458,7 +458,7 @@ class AD9910(Generic[IoUpdateT]):
                      2)  # SDIO input only, MSB first
 
     @kernel
-    def set_cfr2(self, 
+    def set_cfr2(self,
                  asf_profile_enable: int32 = 1,
                  drg_destination: int32 = 0,
                  drg_enable: int32 = 0,
@@ -502,7 +502,7 @@ class AD9910(Generic[IoUpdateT]):
         """Initialize and configure the DDS.
 
         Sets up SPI mode, confirms chip presence, powers down unused blocks,
-        configures the PLL, waits for PLL lock. Uses the ``IO_UPDATE`` 
+        configures the PLL, waits for PLL lock. Uses the ``IO_UPDATE``
         signal multiple times.
 
         :param blind: Do not read back DDS identity and do not wait for lock.
@@ -982,7 +982,7 @@ class AD9910(Generic[IoUpdateT]):
 
     @kernel
     def get_att(self) -> float:
-        """Get digital step attenuator value in SI units. See also 
+        """Get digital step attenuator value in SI units. See also
         :meth:`CPLD.get_channel_att <artiq.coredevice.urukul.CPLD.get_channel_att>`.
 
         :return: Attenuation in dB.
@@ -1002,6 +1002,7 @@ class AD9910(Generic[IoUpdateT]):
     @kernel
     def cfg_osk(self, state: bool):
         """Set CPLD CFG OSK state.
+
         :param state: CPLD CFG OSK bit
         """
         self.cpld.cfg_osk(self.chip_select - 4, state)
@@ -1009,6 +1010,7 @@ class AD9910(Generic[IoUpdateT]):
     @kernel
     def cfg_drctl(self, state: bool):
         """Set CPLD CFG DRCTL state.
+
         :param state: CPLD CFG DRCTL bit
         """
         self.cpld.cfg_drctl(self.chip_select - 4, state)
@@ -1016,6 +1018,7 @@ class AD9910(Generic[IoUpdateT]):
     @kernel
     def cfg_drhold(self, state: bool):
         """Set CPLD CFG DRHOLD state.
+
         :param state: CPLD CFG DRHOLD bit
         """
         self.cpld.cfg_drhold(self.chip_select - 4, state)
@@ -1023,6 +1026,7 @@ class AD9910(Generic[IoUpdateT]):
     @kernel
     def cfg_mask_nu(self, state: bool):
         """Set CPLD CFG MASK_NU state.
+
         :param state: CPLD CFG MASK_NU bit
         """
         self.cpld.cfg_mask_nu(self.chip_select - 4, state)
@@ -1030,6 +1034,7 @@ class AD9910(Generic[IoUpdateT]):
     @kernel
     def cfg_att_en(self, state: bool):
         """Set CPLD CFG ATT_EN state.
+
         :param state: CPLD CFG ATT_EN bit
         """
         self.cpld.cfg_att_en(self.chip_select - 4, state)
@@ -1049,7 +1054,7 @@ class AD9910(Generic[IoUpdateT]):
         self.cpld.set_profile(self.chip_select - 4, profile)
 
     @kernel
-    def set_sync(self, 
+    def set_sync(self,
                  in_delay: int32,
                  window: int32,
                  en_sync_gen: int32 = 0):

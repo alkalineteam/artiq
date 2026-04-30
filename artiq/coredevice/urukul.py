@@ -296,8 +296,8 @@ class ProtoRev8(CPLDVersion):
     def cfg_write(self, cfg: int64):
         """Write to the configuration register.
         See :func:`urukul_cfg` for possible flags.
-        :param cfg: 24-bit data to be written. Will be stored at
-        :attr:`cfg_reg`.
+
+        :param cfg: 24-bit data to be written. Will be stored at :attr:`cfg_reg`.
         """
         self.cpld.bus.set_config_mu(SPI_CONFIG | SPI_END, 24, SPIT_CFG_WR, CS_CFG)
         self.cpld.bus.write(int32(cfg) << 8)
@@ -359,6 +359,7 @@ class ProtoRev8(CPLDVersion):
     def set_profile(self, channel: int32, profile: int32):
         """Set the PROFILE pins.
         The PROFILE pins are common to all four DDS channels.
+
         :param channel: Channel index (0-3). Unused (here for backwards compatability).
         :param profile: PROFILE pins in numeric representation (0-7).
         """
@@ -369,6 +370,7 @@ class ProtoRev8(CPLDVersion):
     @kernel
     def _configure_bit(self, bit_offset: int32, channel: int32, on: bool):
         """Configure a single bit in the configuration register.
+
         :param bit_offset: Base bit offset for the configuration type
         :param channel: Channel index (0-3)
         :param on: Switch value
@@ -383,6 +385,7 @@ class ProtoRev8(CPLDVersion):
     @kernel
     def _configure_all_bits(self, bit_offset: int32, state: int32):
         """Configure all four bits at a specific bit offset in the configuration register.
+
         :param bit_offset: bit offset for the configuration bits
         :param state: State as a 4-bit integer
         """
@@ -394,6 +397,7 @@ class ProtoRev8(CPLDVersion):
     @kernel
     def cfg_mask_nu(self, channel: int32, on: bool):
         """Configure the MASK_NU bit for the given channel in the configuration register.
+
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
@@ -402,6 +406,7 @@ class ProtoRev8(CPLDVersion):
     @kernel
     def cfg_mask_nu_all(self, state: int32):
         """Configure all four MASK_NU bits in the configuration register.
+
         :param state: MASK_NU state as a 4-bit integer.
         """
         self.cpld._configure_all_bits(ProtoRev8.CFG_MASK_NU, state)
@@ -525,10 +530,9 @@ class ProtoRev9(CPLDVersion):
 
     @kernel
     def cfg_write(self, cfg: int64):
-        """Write to the configuration register.
-        See :func:`urukul_cfg` for possible flags.
-        :param cfg: 52-bit data to be written. Will be stored at
-        :attr:`cfg_reg`.
+        """Write to the configuration register. See :func:`urukul_cfg` for possible flags.
+
+        :param cfg: 52-bit data to be written. Will be stored at :attr:`cfg_reg`.
         """
         self.cpld.bus.set_config_mu(SPI_CONFIG, 24, SPIT_CFG_WR, CS_CFG)
         self.cpld.bus.write((int32(cfg >> 28) & 0xFFFFFF) << 8)
@@ -594,6 +598,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def set_profile(self, channel: int32, profile: int32):
         """Set the CFG.PROFILE[0:2] pins for the given channel.
+
         :param channel: Channel (0-3).
         :param profile: PROFILE pins in numeric representation (0-7).
         """
@@ -604,6 +609,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def _configure_bit(self, bit_offset: int32, channel: int32, on: bool):
         """Configure a single bit in the configuration register.
+
         :param bit_offset: Base bit offset for the configuration type
         :param channel: Channel index (0-3)
         :param on: Switch value
@@ -618,6 +624,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def _configure_all_bits(self, bit_offset: int32, state: int32):
         """Configure all four bits at a specific bit offset in the configuration register.
+
         :param bit_offset: bit offset for the configuration bits
         :param state: State as a 4-bit integer
         """
@@ -629,6 +636,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def cfg_mask_nu(self, channel: int32, on: bool):
         """Configure the MASK_NU bit for the given channel in the configuration register.
+
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
@@ -637,6 +645,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def cfg_mask_nu_all(self, state: int32):
         """Configure all four MASK_NU bits in the configuration register.
+
         :param state: MASK_NU state as a 4-bit integer.
         """
         self.cpld._configure_all_bits(ProtoRev9.CFG_MASK_NU, state)
@@ -644,6 +653,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def cfg_att_en(self, channel: int32, on: bool):
         """Configure the ATT_EN bit for the given channel in the configuration register.
+
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
@@ -660,6 +670,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def cfg_osk(self, channel: int32, on: bool):
         """Configure the OSK bit for the given channel in the configuration register.
+
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
@@ -668,6 +679,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def cfg_osk_all(self, state: int32):
         """Configure all four OSK bits in the configuration register.
+
         :param state: OSK state as a 4-bit integer.
         """
         self.cpld._configure_all_bits(ProtoRev9.CFG_OSK, state)
@@ -675,6 +687,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def cfg_drctl(self, channel: int32, on: bool):
         """Configure the DRCTL bit for the given channel in the configuration register.
+
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
@@ -683,6 +696,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def cfg_drctl_all(self, state: int32):
         """Configure all four DRCTL bits in the configuration register.
+
         :param state: DRCTL state as a 4-bit integer.
         """
         self.cpld._configure_all_bits(ProtoRev9.CFG_DRCTL, state)
@@ -690,6 +704,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def cfg_drhold(self, channel: int32, on: bool):
         """Configure the DRHOLD bit for the given channel in the configuration register.
+
         :param channel: Channel index (0-3)
         :param on: Switch value
         """
@@ -698,6 +713,7 @@ class ProtoRev9(CPLDVersion):
     @kernel
     def cfg_drhold_all(self, state: int32):
         """Configure all four DRHOLD bits in the configuration register.
+
         :param state: DRHOLD state as a 4-bit integer.
         """
         self.cpld._configure_all_bits(ProtoRev9.CFG_DRHOLD, state)
