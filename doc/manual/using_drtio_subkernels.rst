@@ -69,11 +69,11 @@ Distributed Direct Memory Access (DDMA)
 
 By default on DRTIO systems, all events recorded by the master's DMA core are kept and played back on the master. With distributed DMA, RTIO events that should be played back on remote destinations are distributed to the corresponding satellites. In some cases (typically, large buffers on several satellites with high event throughput), it allows for better performance and higher bandwidth, as the RTIO events do not have to be sent over the DRTIO link(s) during playback.
 
-To enable distributed DMA for the master, simply provide an ``enable_ddma=True`` argument for the :meth:`~artiq.coredevice.dma.CoreDMA.record` method - taking a snippet from the non-distributed example in the :ref:`core language tutorial <getting-started-dma>`: ::
+To enable distributed DMA for the master, simply provide an ``enable_ddma=True`` argument for the :meth:`~artiq.coredevice.dma.CoreDMA.prepare_record` method - taking a snippet from the non-distributed example in the :ref:`core language tutorial <getting-started-dma>`: ::
 
         @kernel
         def record(self):
-            with self.core_dma.record("pulses", enable_ddma=True):
+            with self.core_dma.prepare_record("pulses", enable_ddma=True):
                 # all RTIO operations now go to the "pulses"
                 # DMA buffer, instead of being executed immediately.
                 for i in range(50):

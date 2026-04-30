@@ -24,9 +24,6 @@ import sphinx_rtd_theme
 mock_modules = ["artiq.gui.waitingspinnerwidget",
                 "artiq.gui.flowlayout",
                 "artiq.gui.models",
-                "artiq.compiler.module",
-                "artiq.compiler.embedding",
-                "artiq.compiler.targets",
                 "artiq.dashboard.waveform",
                 "artiq.coredevice.jsondesc",
                 "nac3artiq",
@@ -148,6 +145,8 @@ nitpick_ignore_regex = [
     (r'py:.*', r'artiq.gateware.*'),
     ('py:mod', r'artiq.test.*'),
     ('py:mod', r'artiq.applets.*'),
+    # TEMP: until NAC3 compiler page rewrite
+    (r'py:.*', r'artiq.language.*'),
     # we can't use artiq.master.* because we shouldn't ignore the scheduler
     ('py:class', r'artiq.master.experiments.*'),
     ('py:class', r'artiq.master.databases.*'),

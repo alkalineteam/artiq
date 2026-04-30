@@ -96,8 +96,8 @@ Breaking changes:
   flashing all regions.
   ::
 
-  # Erase the storage flash region, flash the gateware and firmware but not bootloader and then restart the FPGA device
-  artiq_flash erase=storage write=gateware,firmware start -d ./artiq_kasli/master/ --srcbuild
+    # Erase the storage flash region, flash the gateware and firmware but not bootloader and then restart the FPGA device
+    artiq_flash erase=storage write=gateware,firmware start -d ./artiq_kasli/master/ --srcbuild
 
 * Urukul's AD9910 and AD9912 ``pll_n`` argument is now automatically calculated based on the reference clock frequency.
   This argument in device databases is now invalid and must be removed.

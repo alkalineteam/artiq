@@ -297,7 +297,7 @@ class ProtoRev8(CPLDVersion):
         """Write to the configuration register.
         See :func:`urukul_cfg` for possible flags.
         :param cfg: 24-bit data to be written. Will be stored at
-            :attr:`cfg_reg`.
+        :attr:`cfg_reg`.
         """
         self.cpld.bus.set_config_mu(SPI_CONFIG | SPI_END, 24, SPIT_CFG_WR, CS_CFG)
         self.cpld.bus.write(int32(cfg) << 8)
@@ -307,11 +307,13 @@ class ProtoRev8(CPLDVersion):
     def sta_read(self) -> int32:
         """Read the status register.
         Use any of the following functions to extract values:
+
             * :func:`urukul_sta_rf_sw`
             * :func:`urukul_sta_smp_err`
             * :func:`urukul_sta_pll_lock`
             * :func:`urukul_sta_ifc_mode`
             * :func:`urukul_sta_proto_rev`
+
         :return: The status register value.
         """
         self.cpld.bus.set_config_mu(
@@ -526,7 +528,7 @@ class ProtoRev9(CPLDVersion):
         """Write to the configuration register.
         See :func:`urukul_cfg` for possible flags.
         :param cfg: 52-bit data to be written. Will be stored at
-            :attr:`cfg_reg`.
+        :attr:`cfg_reg`.
         """
         self.cpld.bus.set_config_mu(SPI_CONFIG, 24, SPIT_CFG_WR, CS_CFG)
         self.cpld.bus.write((int32(cfg >> 28) & 0xFFFFFF) << 8)
@@ -538,12 +540,14 @@ class ProtoRev9(CPLDVersion):
     def sta_read(self) -> int32:
         """Read the status register.
         Use any of the following functions to extract values:
+
             * :func:`urukul_sta_rf_sw`
             * :func:`urukul_sta_smp_err`
             * :func:`urukul_sta_pll_lock`
             * :func:`urukul_sta_ifc_mode`
             * :func:`urukul_sta_proto_rev`
             * :func:`urukul_sta_drover`
+
         :return: The status register value.
         """
         self.cpld.bus.set_config_mu(SPI_CONFIG, 24, SPIT_CFG_WR, CS_CFG)
@@ -925,7 +929,7 @@ class CPLD(Generic[V]):
     @kernel
     def cfg_drhold_all(self, state: int32):
         self.version.cfg_drhold_all(state)
-    
+
     @kernel
     def cfg_io_update(self, channel: int32, on: bool):
         self.version.cfg_io_update(channel, on)

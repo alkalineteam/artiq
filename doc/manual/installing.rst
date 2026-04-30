@@ -196,6 +196,8 @@ As above in the Nix section, you may find yourself wanting to add other useful p
 
 For more see the `MSYS2 documentation <https://www.msys2.org/docs/package-management/>`_ on package management. If your favorite package is not available with MSYS2, contact M-Labs using the helpdesk@ email.
 
+.. _installing-upgrading:
+
 Upgrading ARTIQ
 ---------------
 

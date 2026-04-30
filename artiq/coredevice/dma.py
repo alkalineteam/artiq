@@ -36,7 +36,7 @@ def dma_playback(timestamp: int64, ptr: int32, enable_ddma: bool):
 
 @compile
 class DMARecordContextManager:
-    """Context manager returned by :meth:`CoreDMA.record()`.
+    """Context manager returned by :meth:`CoreDMA.prepare_record()`.
 
     Upon entering, starts recording a DMA trace. All RTIO operations are
     redirected to a newly created DMA buffer after this call, and ``now``
@@ -94,7 +94,7 @@ class CoreDMA:
         Enabling it allows running DMA on satellites, rather than sending all
         events from the master.
 
-        Keeping it disabled it may improve performance in some scenarios, 
+        Keeping it disabled it may improve performance in some scenarios,
         e.g. when there are many small satellite buffers."""
         self.epoch += 1
         self.recorder.name = name
@@ -120,7 +120,7 @@ class CoreDMA:
     @kernel
     def get_handle(self, name: str) -> tuple[int32, int64, int32, bool]:
         """Returns a handle to a previously recorded DMA trace. The returned handle
-        is only valid until the next call to :meth:`record` or :meth:`erase`."""
+        is only valid until the next call to :meth:`prepare_record` or :meth:`erase`."""
         (advance_mu, ptr, uses_ddma) = dma_retrieve(name)
         return (self.epoch, advance_mu, ptr, uses_ddma)
 
