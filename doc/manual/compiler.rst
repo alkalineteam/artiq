@@ -1,14 +1,16 @@
 Compiler
 ========
 
+.. warning::
+    ARTIQ-10 will feature the third-generation ARTIQ compiler, NAC3. This represents a major overhaul of ARTIQ compilation, and will provide much faster compilation speeds, a greatly improved type system, and more predictable and transparent operation. **This page has not yet been updated for NAC3.** Many details may be out-of-date as a result.
+
+    NAC3 has been compatible with ARTIQ firmware since ARTIQ-7. A description with basic usage differences can also be found in the pre-alpha announcement post `on the M-Labs Forum <https://forum.m-labs.hk/d/392-nac3-new-artiq-compiler-3-prealpha-release>`_.
+
 The ARTIQ compiler transforms the Python code of the kernels into machine code executable on the core device. For limited purposes (normally, obtaining executable binaries of idle and startup kernels), it can be accessed through :mod:`~artiq.frontend.artiq_compile`. Otherwise it is invoked automatically whenever a function with an applicable decorator is called.
 
 ARTIQ kernel code accepts *nearly,* but not quite, a strict subset of Python 3. The necessities of real-time operation impose a harsher set of limitations; as a result, many Python features are necessarily omitted, and there are some specific discrepancies (see also :ref:`compiler-pitfalls`).
 
 In general, ARTIQ Python supports only statically typed variables; it implements no heap allocation or garbage collection systems, essentially disallowing any heap-based data structures (although lists and arrays remain available in a stack-based form); and it cannot use runtime dispatch, meaning that, for example, all elements of an array must be of the same type. Nonetheless, technical details aside, a basic knowledge of Python is entirely sufficient to write ARTIQ experiments.
-
-.. note::
-    The ARTIQ compiler is now in its second iteration. The third generation, known as NAC3, is `currently in development <https://git.m-labs.hk/M-Labs/nac3>`_, and available for pre-alpha experimental use. NAC3 represents a major overhaul of ARTIQ compilation, and will feature much faster compilation speeds, a greatly improved type system, and more predictable and transparent operation. It is compatible with ARTIQ firmware starting at ARTIQ-7. Instructions for installation and basic usage differences can also be found `on the M-Labs Forum <https://forum.m-labs.hk/d/392-nac3-new-artiq-compiler-3-prealpha-release>`_. While NAC3 is a work in progress and many important features remain unimplemented, installation and feedback is welcomed.
 
 ARTIQ Python code
 -----------------
