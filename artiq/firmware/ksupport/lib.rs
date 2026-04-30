@@ -87,25 +87,26 @@ macro_rules! println {
 }
 
 macro_rules! raise {
-    ($name:expr, $message:expr, $param0:expr, $param1:expr, $param2:expr) => ({
-        use cslice::AsCSlice;
+    ($name:expr, $message:expr, $param0:expr, $param1:expr, $param2:expr) => {{
         let name_id = $crate::eh_artiq::get_exception_id($name);
         let exn = $crate::eh_artiq::Exception {
-            id:       name_id,
-            file:     file!().as_c_slice(),
-            line:     line!(),
-            column:   column!(),
+            id: name_id,
+            file: file!().into(),
+            line: line!(),
+            column: column!(),
             // https://github.com/rust-lang/rfcs/pull/1719
-            function: "(Rust function)".as_c_slice(),
-            message:  $message.as_c_slice(),
-            param:    [$param0, $param1, $param2]
+            function: "(Rust function)".into(),
+            message: $message.into(),
+            param: [$param0, $param1, $param2],
         };
         #[allow(unused_unsafe)]
-        unsafe { $crate::eh_artiq::raise(&exn) }
-    });
-    ($name:expr, $message:expr) => ({
+        unsafe {
+            $crate::eh_artiq::raise(&exn)
+        }
+    }};
+    ($name:expr, $message:expr) => {{
         raise!($name, $message, 0, 0, 0)
-    });
+    }};
 }
 
 mod eh_artiq;

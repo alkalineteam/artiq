@@ -1,7 +1,14 @@
-use core::{mem, str, cell::{Cell, RefCell}, fmt::Write as FmtWrite};
-use alloc::{vec::Vec, string::{String, ToString}};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{
+    cell::{Cell, RefCell},
+    fmt::Write as FmtWrite,
+    mem, str,
+};
+
 use byteorder::{ByteOrder, NativeEndian};
-use cslice::CSlice;
 #[cfg(has_drtio)]
 use tar_no_std::TarArchiveRef;
 
@@ -440,13 +447,13 @@ fn process_host_message(io: &Io, _aux_mutex: &Mutex, _ddma_mutex: &Mutex, _subke
 
             unsafe {
                 let exn = eh::eh_artiq::Exception {
-                    id:       id,
-                    message:  CSlice::new(message as *const u8, usize::MAX),
-                    param:    param,
-                    file:     CSlice::new(file as *const u8, usize::MAX),
-                    line:     line,
-                    column:   column,
-                    function: CSlice::new(function as *const u8, usize::MAX),
+                    id: id,
+                    message: message.into(),
+                    param: param,
+                    file: file.into(),
+                    line: line,
+                    column: column,
+                    function: function.into(),
                 };
                 kern_send(io, &kern::RpcRecvReply(Err(exn)))?;
             }

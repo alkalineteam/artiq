@@ -11,8 +11,6 @@ const URL_BUF_SIZE: usize = 256;
 const ROI_MAX_SIZE: usize = 4096;
 
 type URLBuffer = [u8; URL_BUF_SIZE];
-// Oversize the buffer to make sure the formatted message fits
-type ErrMsgBuffer = [u8; URL_BUF_SIZE * 2];
 
 #[repr(C)]
 pub struct ROIViewerFrame {
@@ -60,11 +58,35 @@ impl fmt::Display for Error {
     }
 }
 
+/// Oversize the buffer to make sure the formatted message fits.
+//
+// TODO: Use `heapless::String` instead.
+struct ErrMsgBuffer {
+    buf: [u8; URL_BUF_SIZE * 2],
+    len: usize,
+}
+
+impl ErrMsgBuffer {
+    pub const fn new() -> Self {
+        Self {
+            buf: [0; URL_BUF_SIZE * 2],
+            len: 0,
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        // SAFETY: `self.buf` is constructed by `fmt::Write`,
+        //         which only produces UTF-8 strings.
+        unsafe { str::from_utf8_unchecked(&self.buf[..self.len]) }
+    }
+}
+
 impl From<Error> for ErrMsgBuffer {
     fn from(value: Error) -> ErrMsgBuffer {
         struct FmtWriter<'a> {
             cursor: Cursor<&'a mut [u8]>,
         }
+
         impl fmt::Write for FmtWriter<'_> {
             fn write_str(&mut self, s: &str) -> fmt::Result {
                 match self.cursor.write_all(s.as_bytes()) {
@@ -74,11 +96,14 @@ impl From<Error> for ErrMsgBuffer {
             }
         }
 
-        let mut buffer: ErrMsgBuffer = [0; URL_BUF_SIZE * 2];
-        let cursor = Cursor::new(&mut buffer[..]);
-        if let Err(e) = fmt::write(&mut FmtWriter { cursor }, format_args!("{}", value)) {
+        let mut buffer: ErrMsgBuffer = ErrMsgBuffer::new();
+        let mut writer = FmtWriter {
+            cursor: Cursor::new(&mut buffer.buf[..]),
+        };
+        if let Err(e) = fmt::write(&mut writer, format_args!("{}", value)) {
             panic!("Failed to write error buffer {:?}", e);
         };
+        buffer.len = writer.cursor.position();
         buffer
     }
 }
@@ -195,7 +220,7 @@ fn drtio_read_bytes(dest: u8, addr: u32, bytes: &mut [u8]) {
         Message::CXPReadReply { length, data } => {
             bytes.copy_from_slice(&data[..*length as usize]);
         }
-        Message::CXPError(err_msg) => raise!("CXPError", err_msg),
+        Message::CXPError(err_msg) => raise!("CXPError", *err_msg),
         _ => unreachable!(),
     })
 }
@@ -212,9 +237,8 @@ pub extern "C" fn download_xml_file(dest: i32, buffer: &mut CMutSlice<i32>) -> i
         ) {
             Ok(size_read) => size_read as i32,
             Err(e) => {
-                // use `let` binding to create a longer lived value
                 let msg_buf = ErrMsgBuffer::from(e);
-                raise!("CXPError", msg_buf);
+                raise!("CXPError", msg_buf.as_str());
             }
         },
     }
@@ -246,7 +270,7 @@ pub extern "C" fn write32(dest: i32, addr: i32, val: i32) {
             });
             recv(|result| match result {
                 Message::CXPWrite32Reply => return,
-                Message::CXPError(err_msg) => raise!("CXPError", err_msg),
+                Message::CXPError(err_msg) => raise!("CXPError", *err_msg),
                 _ => unreachable!(),
             })
         }
@@ -257,7 +281,7 @@ pub extern "C" fn start_roi_viewer(dest: i32, x0: i32, y0: i32, x1: i32, y1: i32
     let (width, height) = ((x1 - x0) as usize, (y1 - y0) as usize);
     if width * height > ROI_MAX_SIZE || height > ROI_MAX_SIZE / 4 {
         let msg_buf = ErrMsgBuffer::from(Error::ROISizeTooBig(width, height));
-        raise!("CXPError", msg_buf);
+        raise!("CXPError", msg_buf.as_str());
     }
 
     match dest {
@@ -290,7 +314,7 @@ pub extern "C" fn download_roi_viewer_frame(
             ROI_MAX_SIZE * 2,
             buffer.len() * 8,
         ));
-        raise!("CXPError", msg_buf);
+        raise!("CXPError", msg_buf.as_str());
     };
 
     let buf = buffer.as_mut_slice();
