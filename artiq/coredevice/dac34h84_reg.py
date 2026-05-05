@@ -182,15 +182,20 @@ class DAC34H84:
                     (self.sif_txenable << 0))
         mmap.append(
             (0x07 << 16) |
-            (self.mask_alarm_from_zerochk << 15) | (1 << 14) |
+            (self.mask_alarm_from_zerochk << 15) |
+            (1 << 14) |
             (self.mask_alarm_fifo_collision << 13) |
             (self.mask_alarm_fifo_1away << 12) |
             (self.mask_alarm_fifo_2away << 11) |
             (self.mask_alarm_dacclk_gone << 10) |
             (self.mask_alarm_dataclk_gone << 9) |
             (self.mask_alarm_output_gone << 8) |
-            (self.mask_alarm_from_iotest << 7) | (1 << 6) |
-            (self.mask_alarm_from_pll << 5) | (self.mask_alarm_parity << 1))
+            (self.mask_alarm_from_iotest << 7) |
+            (1 << 6) |
+            (self.mask_alarm_from_pll << 5) |
+            (self.mask_alarm_parity << 1) |
+            (1 << 0)
+        )
         mmap.append(
             (0x08 << 16) | (self.qmc_offseta << 0))
         mmap.append(
