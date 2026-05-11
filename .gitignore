@@ -37,3 +37,4 @@ __pycache__/
 /device_db*.py
 /test*
 /lri.json
+/.vscode
