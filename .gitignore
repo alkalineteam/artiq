@@ -6,6 +6,7 @@ __pycache__/
 *.bin
 *.elf
 *.fbi
+*.bit
 *.pcap
 *.prof
 .ipynb_checkpoints
@@ -35,3 +36,4 @@ __pycache__/
 /dataset_db.mdb-lock
 /device_db*.py
 /test*
+/lri.json
