@@ -225,7 +225,7 @@
       propagatedBuildInputs = [pkgs.python3Packages.pyserial];
     };
 
-    misoc = pkgs.python3Packages.buildPythonPackage {
+      misoc = pkgs.python3Packages.buildPythonPackage {
       name = "misoc";
       src = src-misoc;
       pyproject = true;
