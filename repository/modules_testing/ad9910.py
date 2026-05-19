@@ -9,8 +9,8 @@ class AD9910(EnvExperiment):
         self.ad9910_0=self.get_device("urukul0_ch0") 
 
         self.setattr_argument("Enable_RF", BooleanValue(default=False))
-        self.setattr_argument("Frequency", NumberValue())
-        self.setattr_argument("Attenuation", NumberValue())
+        self.setattr_argument("Frequency", NumberValue(default=350.0, unit="MHz", min=0.0, max=400.0))
+        self.setattr_argument("Attenuation", NumberValue(default=11.8, unit="dB", min=0.0, max=31.5))
 
     @kernel
     def run(self):
@@ -19,7 +19,7 @@ class AD9910(EnvExperiment):
 
         self.ad9910_0.sw.on()
 
-        self.ad9910_0.cpld.init()
+        self.ad9910_0.cpld.init(blind=True)
         self.ad9910_0.init()
         
         self.ad9910_0.set_att(self.Attenuation)    #limit  : -31.5
