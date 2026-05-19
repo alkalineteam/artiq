@@ -7,4 +7,4 @@ class TestCore(EnvExperiment):
 
 	@kernel
 	def run(self):
-		print("BEC is ready, we will show it in December asdsadsadsad")
+		print("BEC is ready, we will show it in December")
