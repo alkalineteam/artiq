@@ -5,7 +5,6 @@ import os, unittest
 from numpy import int32, int64
 
 from math import sqrt
-from typing import Generic, TypeVar
 
 from artiq.experiment import *
 from artiq.test.hardware_testbench import ExperimentCase
@@ -13,7 +12,7 @@ from artiq.coredevice import exceptions
 from artiq.coredevice.core import Core
 from artiq.coredevice.dma import CoreDMA
 from artiq.coredevice.rtio import RTIOBatch
-from artiq.coredevice.ttl import TTLOut, TTLInOut, TTLClockGen
+from artiq.coredevice.ttl import TTLInOut, TTLClockGen
 from artiq.coredevice.ad9914 import AD9914
 from artiq.coredevice.comm_mgmt import CommMgmt
 from artiq.coredevice.comm_analyzer import (StoppedMessage, OutputMessage, InputMessage,
@@ -23,9 +22,6 @@ from artiq.coredevice.comm_analyzer import (StoppedMessage, OutputMessage, Input
 artiq_low_latency = os.getenv("ARTIQ_LOW_LATENCY")
 skip_if_no_opt = unittest.skipIf(os.getenv("NAC3_OPT_LEVEL") == "0",
                                  "timings are expected to be slow when program is unoptimized")
-
-
-TTLOutCapable = TypeVar("TTLOutCapable", TTLInOut, TTLOut)
 
 
 @compile
@@ -106,10 +102,10 @@ class RTT(EnvExperiment):
 
 
 @compile
-class Loopback(EnvExperiment, Generic[TTLOutCapable]):
+class Loopback(EnvExperiment):
     core: KernelInvariant[Core]
     loop_in: KernelInvariant[TTLInOut]
-    loop_out: KernelInvariant[TTLOutCapable]
+    loop_out: KernelInvariant[Auto]
 
     def build(self):
         self.setattr_device("core")
@@ -169,9 +165,9 @@ class ClockGeneratorLoopback(EnvExperiment):
 
 
 @compile
-class PulseRate(EnvExperiment, Generic[TTLOutCapable]):
+class PulseRate(EnvExperiment):
     core: KernelInvariant[Core]
-    ttl_out: KernelInvariant[TTLOutCapable]
+    ttl_out: KernelInvariant[Auto]
 
     def build(self):
         self.setattr_device("core")
@@ -238,10 +234,10 @@ class PulseRateAD9914DDS(EnvExperiment):
 
 
 @compile
-class LoopbackCount(EnvExperiment, Generic[TTLOutCapable]):
+class LoopbackCount(EnvExperiment):
     core: KernelInvariant[Core]
     loop_in: KernelInvariant[TTLInOut]
-    loop_out: KernelInvariant[TTLOutCapable]
+    loop_out: KernelInvariant[Auto]
     npulses: KernelInvariant[int32]
 
     def build(self, npulses):
@@ -275,10 +271,10 @@ class IncorrectPulseTiming(Exception):
 
 
 @compile
-class LoopbackGateTiming(EnvExperiment, Generic[TTLOutCapable]):
+class LoopbackGateTiming(EnvExperiment):
     core: KernelInvariant[Core]
     loop_in: KernelInvariant[TTLInOut]
-    loop_out: KernelInvariant[TTLOutCapable]
+    loop_out: KernelInvariant[Auto]
 
     def build(self):
         self.setattr_device("core")
@@ -347,10 +343,10 @@ class IncorrectLevel(Exception):
 
 
 @compile
-class Level(EnvExperiment, Generic[TTLOutCapable]):
+class Level(EnvExperiment):
     core: KernelInvariant[Core]
     loop_in: KernelInvariant[TTLInOut]
-    loop_out: KernelInvariant[TTLOutCapable]
+    loop_out: KernelInvariant[Auto]
 
     def build(self):
         self.setattr_device("core")
@@ -376,10 +372,10 @@ class Level(EnvExperiment, Generic[TTLOutCapable]):
 
 
 @compile
-class Watch(EnvExperiment, Generic[TTLOutCapable]):
+class Watch(EnvExperiment):
     core: KernelInvariant[Core]
     loop_in: KernelInvariant[TTLInOut]
-    loop_out: KernelInvariant[TTLOutCapable]
+    loop_out: KernelInvariant[Auto]
 
     def build(self):
         self.setattr_device("core")
@@ -412,9 +408,9 @@ class Watch(EnvExperiment, Generic[TTLOutCapable]):
 
 
 @compile
-class Underflow(EnvExperiment, Generic[TTLOutCapable]):
+class Underflow(EnvExperiment):
     core: KernelInvariant[Core]
-    ttl_out: KernelInvariant[TTLOutCapable]
+    ttl_out: KernelInvariant[Auto]
 
     def build(self):
         self.setattr_device("core")
@@ -447,9 +443,9 @@ class Overflow(EnvExperiment):
 
 
 @compile
-class SequenceError(EnvExperiment, Generic[TTLOutCapable]):
+class SequenceError(EnvExperiment):
     core: KernelInvariant[Core]
-    ttl_out: KernelInvariant[TTLOutCapable]
+    ttl_out: KernelInvariant[Auto]
 
     def build(self):
         self.setattr_device("core")
@@ -465,9 +461,9 @@ class SequenceError(EnvExperiment, Generic[TTLOutCapable]):
 
 
 @compile
-class Collision(EnvExperiment, Generic[TTLOutCapable]):
+class Collision(EnvExperiment):
     core: KernelInvariant[Core]
-    ttl_out_serdes: KernelInvariant[TTLOutCapable]
+    ttl_out_serdes: KernelInvariant[Auto]
 
     def build(self):
         self.setattr_device("core")
@@ -593,10 +589,10 @@ class HandoverException(EnvExperiment):
             pass
 
 @compile
-class RTIOBatching(EnvExperiment, Generic[TTLOutCapable]):
+class RTIOBatching(EnvExperiment):
     core: KernelInvariant[Core]
     core_batch: KernelInvariant[RTIOBatch]
-    ttl_out: KernelInvariant[TTLOutCapable]
+    ttl_out: KernelInvariant[Auto]
 
     def build(self):
         self.setattr_device("core")
@@ -829,10 +825,10 @@ class RPCTest(ExperimentCase):
 
 
 @compile
-class _DMA(EnvExperiment, Generic[TTLOutCapable]):
+class _DMA(EnvExperiment):
     core: KernelInvariant[Core]
     core_dma: KernelInvariant[CoreDMA]
-    ttl_out: KernelInvariant[TTLOutCapable]
+    ttl_out: KernelInvariant[Auto]
     trace_name: Kernel[str]
     delta: Kernel[int64]
 
