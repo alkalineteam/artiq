@@ -19,7 +19,7 @@ pub struct RefCounted<T> {
 }
 
 impl<T> RefCounted<T> {
-    pub fn empty_array() -> RefCounted<RefAwareArray<T>> {
+    pub fn get_empty_array() -> RefCounted<RefAwareArray<T>> {
         RefCounted {
             header: ObjectHeader {
                 refcount: 0,
