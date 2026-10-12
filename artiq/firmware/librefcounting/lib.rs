@@ -19,7 +19,7 @@ pub struct RefCounted<T> {
 }
 
 impl<T> RefCounted<T> {
-    pub fn get_empty_array() -> RefCounted<RefAwareArray<T>> {
+    pub const fn get_empty_array() -> RefCounted<RefAwareArray<T>> {
         RefCounted {
             header: ObjectHeader {
                 refcount: 0,
@@ -51,7 +51,7 @@ impl<T> RefAwareArray<T> {
         slice::from_raw_parts_mut(self.data.as_mut_ptr(), len)
     }
 
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         RefAwareArray {
             refcounted_elems: 0,
             _padding: [0; 8usize.saturating_sub(size_of::<usize>())],
