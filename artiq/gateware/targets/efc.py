@@ -155,6 +155,7 @@ class _SatelliteBase(BaseSoC, AMPSoC):
                  l2_size=128*1024,
                  l2_line_size=64,
                  clk_freq=rtio_clk_freq,
+                 gateware_bin_file=True,
                  **kwargs)
         AMPSoC.__init__(self)
         add_identifier(self, gateware_identifier_str=gateware_identifier_str)
@@ -259,7 +260,7 @@ class _SatelliteBase(BaseSoC, AMPSoC):
         self.submodules.rtio_dma = rtio.DMA(self.get_native_sdram_if(), self.cpu_dw)
         self.csr_devices.append("rtio_dma")
         self.submodules.cri_con = rtio.CRIInterconnectShared(
-            [self.drtiosat.cri, self.rtio_dma.cri],
+            [self.drtiosat.cri, self.rtio_dma.cri, self.rtio.cri],
             [self.local_io.cri],
             enable_routing=True)
         self.csr_devices.append("cri_con")
@@ -347,7 +348,7 @@ def main():
         description="ARTIQ device binary builder for EEM FMC Carrier systems")
     builder_args(parser)
     parser.set_defaults(output_dir="artiq_efc")
-    parser.add_argument("--efc-hw-rev", choices=["v1.0", "v1.1"], default="v1.1",
+    parser.add_argument("--efc-hw-rev", choices=["v1.0", "v1.1", "v1.2"], default="v1.2",
                         help="EFC hardware revision")
     parser.add_argument("--gateware-identifier-str", default=None,
                         help="Override ROM identifier")

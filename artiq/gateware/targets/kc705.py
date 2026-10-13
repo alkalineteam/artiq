@@ -95,6 +95,7 @@ class _StandaloneBase(MiniSoC, AMPSoC):
                          ethmac_nrxslots=4,
                          ethmac_ntxslots=4,
                          rtio_sys_merge=True,
+                         gateware_bin_file=True,
                          **kwargs)
         AMPSoC.__init__(self)
         add_identifier(self, gateware_identifier_str=gateware_identifier_str)
@@ -150,6 +151,7 @@ class _StandaloneBase(MiniSoC, AMPSoC):
         self.config["I2C_BUS_COUNT"] = 1
 
         self.config["HAS_DDS"] = None
+        self.config["RTIO_FREQUENCY"] = str( "100.0" if drtio_100mhz else "125.0" )
 
     def add_rtio(self, rtio_channels):
         self.submodules.rtio_tsc = rtio.TSC(glbl_fine_ts_width=3)
@@ -195,6 +197,7 @@ class _MasterBase(MiniSoC, AMPSoC):
                          ethmac_ntxslots=4,
                          clk_freq=clk_freq,
                          rtio_sys_merge=True,
+                         gateware_bin_file=True,
                          **kwargs)
         AMPSoC.__init__(self)
         add_identifier(self, gateware_identifier_str=gateware_identifier_str)
@@ -342,6 +345,7 @@ class _SatelliteBase(BaseSoC, AMPSoC):
                  integrated_sram_size=8192,
                  clk_freq=clk_freq,
                  rtio_sys_merge=True,
+                 gateware_bin_file=True,
                  **kwargs)
         AMPSoC.__init__(self)
         add_identifier(self, gateware_identifier_str=gateware_identifier_str)

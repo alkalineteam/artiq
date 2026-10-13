@@ -5,6 +5,7 @@ import numpy as np
 from numpy import int32, int64, uint32, uint64, float64, bool_, str_, ndarray
 from types import GenericAlias, ModuleType, SimpleNamespace
 from typing import _GenericAlias, Generic, Literal, TypeVar
+from enum import EnumType, IntEnum
 
 from artiq.language.core import *
 from artiq.language.core import _ConstGenericMarker
@@ -89,6 +90,11 @@ class Core:
             "abs": abs,
             "some": Some,
             "staticmethod": staticmethod,
+
+            "enum": {
+                "IntEnum": IntEnum,
+                "EnumType": EnumType,
+            },
 
             "types": {
                 "GenericAlias": GenericAlias,
@@ -201,6 +207,7 @@ class Core:
                 "none": none,
                 "virtual": virtual,
                 "Option": Option,
+                "critical": critical,
 
                 # Decorator functions
                 "compile": compile,
@@ -208,6 +215,10 @@ class Core:
                 "kernel": kernel,
                 "portable": portable,
                 "rpc": rpc,
+
+                # Logging
+                "rtio_log": rtio_log,
+                "core_log": core_log,
             },
         }
 
@@ -227,7 +238,7 @@ class Core:
 
         self.target = target
         self.analyzed = False
-        self.compiler = nac3artiq.NAC3(target, nac3_builtins)
+        self.compiler = nac3artiq.NAC3(nac3_builtins)
         
         self.analyzer_proxy_name = analyzer_proxy
         self.analyze_at_run_end = analyze_at_run_end
@@ -243,11 +254,7 @@ class Core:
         """
         self.comm.close()
 
-    def compile(self, method, args, kwargs, embedding_map, output_filename=None, debug_filename=None, target=None):
-        if target is not None:
-            # NAC3TODO: subkernels
-            raise NotImplementedError
-        
+    def compile(self, method, args, kwargs, embedding_map, output_filename=None, debug_filename=None):
         if (output_filename is None) != (debug_filename is None):
             raise ValueError("both output and debug filenames should be specified or unspecified")
 
@@ -268,9 +275,9 @@ class Core:
 
         # NAC3TODO: handle self.report_invariants
         if output_filename is None and debug_filename is None:
-            return self.compiler.compile_method_to_mem(obj, name, args, embedding_map)
+            return self.compiler.compile_method_to_mem(obj, name, args, embedding_map, self.target)
         else:
-            self.compiler.compile_method_to_file(obj, name, args, output_filename, debug_filename, embedding_map)
+            self.compiler.compile_method_to_file(obj, name, args, output_filename, debug_filename, embedding_map, self.target)
 
     def run(self, function, args, kwargs):
         embedding_map = EmbeddingMap()

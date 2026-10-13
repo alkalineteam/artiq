@@ -17,6 +17,21 @@ ARTIQ-10 (Unreleased)
 * The IPv4 and IPv6 default route configuration entries were renamed
  - `ipv4_default_route` was renamed to `ip_default_route`
  - `ipv6_default_route` was renamed to `ip6_default_route`
+* Setting Zotino voltages in the dashboard moninj panel is now supported.
+* Parameter entries in the device database are now supported.
+* The MSYS2 launcher set up by the offline installer now runs on a native Windows console instead of `mintty <https://mintty.github.io/>`_, which does not own a real console and `could leave processes running <https://github.com/msys2/msys2-runtime/issues/267>`_ after the window was closed.
+* GUI:
+ - Implemented a new `TableValue` argument type for tabular data.
+ - Added `Copy image to clipboard` option to right click menu for the `plot_xy.py`, `plot_xy_hist.py`, `plot_hist.py`, and `image.py` applets
+ - A message at the bottom of the explorer dock appears when there are experiments saved that are no longer in the repository. This message can be clicked to open a dialog box that contains the list of experiments not found in the repository and their arguments, which can be deleted by the user.
+ - Added `Saved experiments not in repository` option to the Explorer Dock's right click menu, which opens the dialog box where one can delete saved experiments not found in the repository.
+* `artiq_flash`: a backup command has been added to save the current contents of the flash partitions to a user-defined directory. Gateware, storage and firmware are truncated to their actual data size, while the complete bootloader partition is preserved.
+* RJ45_LVDS now supports per-channel input/output direction configuration. Please set the dio peripheral's "board" field to "RJ45_LVDS" in the JSON system descriptions. 
+
+Breaking changes:
+
+* `si5324_ext_ref` and `ext_ref_frequency` compile-time options have been removed. 
+* `i` and `e` values for the `rtio_clock` are no longer supported.
 
 ARTIQ-9
 -------

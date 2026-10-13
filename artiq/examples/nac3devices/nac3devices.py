@@ -11,12 +11,14 @@ from artiq.coredevice.ad9912 import AD9912
 from artiq.coredevice.ad9910 import AD9910, SyncDataUser as AD9910Sync
 from artiq.coredevice.ttl import TTLOut
 from artiq.coredevice.sampler import Sampler
-from artiq.coredevice.suservo import SUServo, Channel as SUServoChannel, SyncDataUser as SUServoSync
+from artiq.coredevice import suservo
 from artiq.coredevice.edge_counter import EdgeCounter
 from artiq.coredevice.grabber import Grabber
 from artiq.coredevice.fastino import Fastino
 from artiq.coredevice.phaser import Phaser
-from artiq.coredevice.shuttler import DCBias as ShuttlerDCBias, DDS as ShuttlerDDS
+from artiq.coredevice import shuttler
+from artiq.coredevice import songbird
+from artiq.coredevice.phaser_drtio import PhaserMTDDS, PhaserMTDDSChannel
 
 
 @compile
@@ -33,14 +35,17 @@ class NAC3Devices(EnvExperiment):
     urukul1_cpld: KernelInvariant[UrukulCPLD[ProtoRev9]]
     urukul1_ch0: KernelInvariant[AD9910[AD9910Sync]]
     sampler0: KernelInvariant[Sampler]
-    suservo0: Kernel[SUServo[SUServoSync]]
-    suservo0_ch0: KernelInvariant[SUServoChannel[SUServoSync]]
+    suservo0: Kernel[suservo.SUServo[Auto]]
+    suservo0_ch0: KernelInvariant[suservo.Channel[Auto]]
     ttl0_counter: KernelInvariant[EdgeCounter]
     grabber0: KernelInvariant[Grabber]
     fastino0: KernelInvariant[Fastino]
     phaser0: KernelInvariant[Phaser]
-    shuttler0_dcbias0: KernelInvariant[ShuttlerDCBias]
-    shuttler0_dds0: KernelInvariant[ShuttlerDDS]
+    shuttler0_dcbias0: KernelInvariant[shuttler.DCBias]
+    shuttler0_dds0: KernelInvariant[shuttler.DDS]
+    songbird0_dds0: KernelInvariant[songbird.DDS]
+    phaser_drtio_mtdds0_fpga:  KernelInvariant[PhaserMTDDS]
+    phaser_drtio_mtdds0_channel0: KernelInvariant[PhaserMTDDSChannel]
 
     def build(self):
         self.setattr_device("core")
@@ -63,6 +68,9 @@ class NAC3Devices(EnvExperiment):
         self.setattr_device("phaser0")
         self.setattr_device("shuttler0_dcbias0")
         self.setattr_device("shuttler0_dds0")
+        self.setattr_device("songbird0_dds0")
+        self.setattr_device("phaser_drtio_mtdds0_fpga")
+        self.setattr_device("phaser_drtio_mtdds0_channel0")
 
     @kernel
     def run(self):
@@ -91,3 +99,7 @@ class NAC3Devices(EnvExperiment):
         self.sampler0.init()
         samples = [0. for _ in range(8)]
         self.sampler0.sample(samples)
+
+        self.core.break_realtime()
+        self.phaser_drtio_mtdds0_fpga.init()
+        self.phaser_drtio_mtdds0_channel0.init()

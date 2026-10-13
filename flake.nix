@@ -253,7 +253,7 @@
           '';
           installPhase = ''
             mkdir $out
-            cp artiq_${target}/${variant}/gateware/top.bit $out
+            cp artiq_${target}/${variant}/gateware/top.bin $out
             if [ -e artiq_${target}/${variant}/software/bootloader/bootloader.bin ]
             then cp artiq_${target}/${variant}/software/bootloader/bootloader.bin $out
             fi
@@ -293,10 +293,8 @@
         paths = [pkgs.openocd bscan_spi_bitstreams-pkg];
       };
 
-    latex-artiq-manual = pkgs.texlive.combine {
-      inherit
-        (pkgs.texlive)
-        scheme-basic
+    latex-artiq-manual = pkgs.texliveSmall.withPackages (ps:
+      with ps; [
         latexmk
         cmap
         collection-fontsrecommended
@@ -316,8 +314,7 @@
         booktabs
         pgf
         pgfplots
-        ;
-    };
+    ]);
 
     artiq-frontend-dev-wrappers =
       pkgs.runCommand "artiq-frontend-dev-wrappers" {}
@@ -522,7 +519,6 @@
                   artiq
                   ps.paramiko
                 ]
-                ++ ps.paramiko.optional-dependencies.ed25519
           ))
           pkgs.openssh
           packages.x86_64-linux.openocd-bscanspi # for the bscanspi bitstreams
@@ -564,6 +560,14 @@
 
             python -m unittest discover -v artiq.test.coredevice
             NAC3_OPT_LEVEL=0 python -m unittest discover -v artiq.test.coredevice
+
+            BACKUP_DIR=`mktemp -d`
+            artiq_flash -t kc705 -H rpi-1.hkg.mlsi backup=$BACKUP_DIR
+            cmp ${packages.x86_64-linux.artiq-board-kc705-nist_clock}/top.bin $BACKUP_DIR/top.bin
+            cmp ${packages.x86_64-linux.artiq-board-kc705-nist_clock}/runtime.fbi $BACKUP_DIR/firmware.fbi
+            cmp kc705_nist_clock.config $BACKUP_DIR/storage.bin
+            BOOTLOADER_SIZE=`stat -c %s ${packages.x86_64-linux.artiq-board-kc705-nist_clock}/bootloader.bin`
+            cmp -n $BOOTLOADER_SIZE ${packages.x86_64-linux.artiq-board-kc705-nist_clock}/bootloader.bin $BACKUP_DIR/bootloader.bin
           )
 
           touch $out

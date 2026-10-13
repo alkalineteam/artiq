@@ -4,6 +4,7 @@
 
 import argparse
 import sys
+import time
 import tarfile
 from operator import itemgetter
 import logging
@@ -11,7 +12,7 @@ from collections import defaultdict
 
 import h5py
 
-from sipyco import common_args
+from sipyco import common_args, pyon
 
 from artiq import __version__ as artiq_version
 from artiq.language.environment import EnvExperiment, ProcessArgumentManager
@@ -189,9 +190,10 @@ def run(with_file=False):
     try:
         dataset_mgr = DatasetManager(dataset_db)
         device_mgr = DeviceManager(DeviceDB(args.device_db),
-                                  virtual_devices={"scheduler": DummyScheduler(),
-                                                   "ccb": DummyCCB()})
+                                   virtual_devices={"scheduler": DummyScheduler(),
+                                                    "ccb": DummyCCB()})
         try:
+            start_time = time.time()
             exp_inst = _build_experiment(device_mgr, dataset_mgr, args)
             exp_inst.prepare()
             exp_inst.run()
@@ -203,13 +205,15 @@ def run(with_file=False):
             raise exn
         finally:
             device_mgr.close_devices()
-
-        if args.hdf5 is not None:
-            with h5py.File(args.hdf5, "w") as f:
-                dataset_mgr.write_hdf5(f)
-        else:
-            for k, v in sorted(dataset_mgr.local.items(), key=itemgetter(0)):
-                print("{}: {}".format(k, v))
+            if args.hdf5 is not None:
+                with h5py.File(args.hdf5, "w") as f:
+                    dataset_mgr.write_hdf5(f)
+                    f["artiq_version"] = artiq_version
+                    f["start_time"] = start_time
+                    f["expid"] = pyon.encode(device_mgr.virtual_devices["scheduler"].expid)
+            else:
+                for k, v in sorted(dataset_mgr.local.items(), key=itemgetter(0)):
+                    print("{}: {}".format(k, v))
     finally:
         dataset_db.save()
         dataset_db.close_db()

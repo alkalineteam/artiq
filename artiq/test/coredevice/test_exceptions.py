@@ -1,13 +1,16 @@
 import unittest
 import linecache
-import artiq.coredevice.exceptions as exceptions
+
+from numpy import int32
+
+import nac3artiq
 
 from artiq.experiment import *
 from artiq.test.hardware_testbench import ExperimentCase
-from artiq.language.embedding_map import EmbeddingMap
 from artiq.coredevice.core import Core, test_exception_id_sync
 from artiq.coredevice.dma import CoreDMA
-from numpy import int32
+import artiq.coredevice.exceptions as exceptions
+
 
 """
 Test sync in exceptions raised between host and kernel
@@ -19,7 +22,7 @@ Considers the following two cases:
 Ensures same exception is raised on both kernel and host in either case
 """
 
-exception_names = EmbeddingMap().string_map
+exception_names = nac3artiq.RUNTIME_EXCEPTION_NAMES
 
 
 @compile
@@ -46,7 +49,8 @@ class ExceptionTest(ExperimentCase):
     def test_raise_exceptions_kernel(self):
         exp = self.create(_TestExceptionSync)
         
-        for id, name in exception_names.items():
+        # Exceptions are always the first to be assigned IDs
+        for id, name in enumerate(exception_names):
             name = name.split('.')[-1].split(':')[-1]
             with self.assertRaises(getattr(exceptions, name)) as ctx:
                 exp.raise_exception_kernel(id)
@@ -56,7 +60,7 @@ class ExceptionTest(ExperimentCase):
     def test_raise_exceptions_host(self):
         exp = self.create(_TestExceptionSync)
 
-        for id, name in exception_names.items():
+        for id, name in enumerate(exception_names):
             name = name.split('.')[-1].split(':')[-1]
             with self.assertRaises(getattr(exceptions, name)) as ctx:
                 exp.raise_exception_host(id)
@@ -97,13 +101,17 @@ class TracebackTest(ExperimentCase):
                     yield inlined_filename, inlined_line
                 yield filename, line
 
+        source_lines = ""
+        expected_line = "self.core_dma.playback(self.trace_name)"
         for filename, line in get_backtrace_records():
             source_line = linecache.getline(filename, line)
-            if source_line:
-                self.assertEqual(
-                    source_line.strip(),
-                    "self.core_dma.playback(self.trace_name)",
-                    "traceback found an incorrect source of exception")
-                return
-
-        self.fail("traceback failed to find the source of exception")
+            source_lines += source_line
+            if source_line.strip() == expected_line:
+                break
+        else:
+            if source_lines:
+                self.fail("traceback found an incorrect source of exception:\n"
+                    f"expected:\n\t{expected_line}\n"
+                    f"found:\n{source_lines}")
+            else:
+                self.fail("traceback failed to find the source of exception")

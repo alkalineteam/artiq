@@ -16,19 +16,19 @@ from artiq.language.units import us, GHz, MHz
 from artiq.coredevice.core import Core
 from artiq.coredevice.mirny import Mirny
 from artiq.coredevice.ttl import TTLOut
-from artiq.coredevice.spi2 import *
+from artiq.coredevice import spi2 as spi
 from artiq.coredevice.adf5356_reg import *
 
 
 SPI_CONFIG = (
-    0 * SPI_OFFLINE
-    | 0 * SPI_END
-    | 0 * SPI_INPUT
-    | 1 * SPI_CS_POLARITY
-    | 0 * SPI_CLK_POLARITY
-    | 0 * SPI_CLK_PHASE
-    | 0 * SPI_LSB_FIRST
-    | 0 * SPI_HALF_DUPLEX
+    0 * spi.SPI_OFFLINE
+    | 0 * spi.SPI_END
+    | 0 * spi.SPI_INPUT
+    | 1 * spi.SPI_CS_POLARITY
+    | 0 * spi.SPI_CLK_POLARITY
+    | 0 * spi.SPI_CLK_PHASE
+    | 0 * spi.SPI_LSB_FIRST
+    | 0 * spi.SPI_HALF_DUPLEX
 )
 
 
@@ -36,7 +36,7 @@ ADF5356_MIN_VCO_FREQ = 3.4 * GHz
 ADF5356_MAX_VCO_FREQ = 6.8 * GHz
 ADF5356_MAX_FREQ_PFD = int32(125.0 * MHz)
 ADF5356_MODULUS1 = int32(1 << 24)
-ADF5356_MAX_MODULUS2 = int32(1 << 28)  # FIXME: ADF5356 has 28 bits MOD2
+ADF5356_MAX_MODULUS2 = int32((1 << 28) - 1)  # FIXME: ADF5356 has 28 bits MOD2
 ADF5356_MAX_R_CNT = int32(1023)
 
 
@@ -585,8 +585,8 @@ class ADF5356:
 
         See the "Register Map, Register 6, Negative Bleed" documentation.
         """
-        return 1 if ((self.pll_frac1() == 0) and (self.pll_frac2() == 0)
-                and (float(self.f_pfd()) <= 100. * MHz)) else 0
+        return 0 if (((self.pll_frac1() == 0) and (self.pll_frac2() == 0))
+                or (float(self.f_pfd())) > 100. * MHz) else 1
 
     @portable
     def _update_vco_timeout(self, f_pfd: int64):
@@ -626,7 +626,7 @@ def calculate_pll(f_vco: float, f_pfd: int64) -> tuple[int32, int32, tuple[int32
 
     where
         
-    ``mod1 = 2**24`` and ``mod2 <= 2**28``
+    ``mod1 = 2**24`` and ``2 <= mod2 <= 2**28 - 1``
 
     :param f_vco: target VCO frequency
     :param f_pfd: PFD frequency
@@ -642,14 +642,19 @@ def calculate_pll(f_vco: float, f_pfd: int64) -> tuple[int32, int32, tuple[int32
     frac1, frac2 = int32(r // float(f_pfd)), int64(r % float(f_pfd))
 
     # auxiliary fractional part
-    mod2 = f_pfd
+    if frac2 == int64(0):
+        mod2 = int64(2)
+    else:
+        mod2 = f_pfd
 
-    while mod2 > int64(ADF5356_MAX_MODULUS2):
-        mod2 >>= 1
-        frac2 >>= 1
+        while mod2 > int64(ADF5356_MAX_MODULUS2):
+            mod2 >>= 1
+            frac2 >>= 1
 
-    gcd_div = gcd(frac2, mod2)
-    mod2 //= gcd_div
-    frac2 //= gcd_div
+        gcd_div = gcd(frac2, mod2)
+        mod2 //= gcd_div
+        frac2 //= gcd_div
+
+    assert int64(2) <= mod2 <= int64(ADF5356_MAX_MODULUS2)
 
     return n, frac1, split_msb_lsb_28b(int32(frac2)), split_msb_lsb_28b(int32(mod2))

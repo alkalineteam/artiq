@@ -15,16 +15,18 @@ extern crate board_artiq;
 extern crate proto_artiq;
 extern crate riscv;
 extern crate alloc_list;
+extern crate refcounting;
 
 use core::{mem, ptr, slice, str, convert::TryFrom, alloc::Layout};
 use cslice::CSlice;
 use io::Cursor;
-use dyld::Library;
+use dyld::{Library, lookup_fn};
 use board_artiq::{mailbox, rpc_queue};
 use proto_artiq::{kernel_proto, rpc_proto};
 use kernel_proto::*;
 use board_misoc::csr;
 use riscv::register::{mcause, mepc, mtval};
+use refcounting::{List, RefCounted, RefAwareArray};
 
 fn send(request: &Message) {
     unsafe { mailbox::send(request as *const _ as usize) }
@@ -138,7 +140,7 @@ fn heap_reset() {
 pub unsafe extern "C" fn malloc(size: usize) -> *mut u8 {
     let layout = match Layout::from_size_align(size, 8) {
         Ok(l) => l,
-        Err(_) => raise!("MemoryError", "kernel CPU heap exhausted"),
+        Err(_) => raise!("MemoryError", "allocation size too large"),
     };
     let ptr = core::alloc::GlobalAlloc::alloc(&ALLOC, layout);
     if ptr.is_null() {
@@ -250,19 +252,35 @@ fn terminate(exceptions: &'static [Option<eh_artiq::Exception<'static>>],
     loop {}
 }
 
-extern fn cache_get<'a>(key: CSlice<u8>) -> *const CSlice<'a, i32> {
+extern fn cache_get(key: CSlice<u8>) -> *mut List<i32> {
     send(&CacheGetRequest {
-        key:   str::from_utf8(key.as_ref()).unwrap()
+        key: str::from_utf8(key.as_ref()).unwrap()
     });
-    recv!(&CacheGetReply { value } => {
-        value
+
+    recv!(&CacheGetReply { value, len } => {
+        unsafe {
+            let wrap = lookup_fn!(
+                b"__nac3_list_i32_wrap",
+                fn(
+                    *mut RefCounted<RefAwareArray<i32>>,
+                    usize,
+                    bool
+                ) -> *mut List<i32>
+            ).unwrap();
+            wrap(
+                value as *const _ as *mut _,
+                len as usize,
+                false
+            )
+        }
     })
 }
 
-extern "C-unwind" fn cache_put(key: CSlice<u8>, list: &CSlice<i32>) {
+extern "C-unwind" fn cache_put(key: CSlice<u8>, list: &List<i32>) {
     send(&CachePutRequest {
         key:   str::from_utf8(key.as_ref()).unwrap(),
-        value: list.as_ref()
+        value: list.get_backing_array(),
+        len:   list.inner.len
     });
     recv!(&CachePutReply { succeeded } => {
         if !succeeded {
@@ -384,13 +402,14 @@ extern fn dma_record_output(target: i32, word: i32) {
     }
 }
 
-extern fn dma_record_output_wide(target: i32, words: &CSlice<i32>) {
+extern fn dma_record_output_wide(target: i32, words: &refcounting::List<i32>) {
+    let words = words.as_slice();
     assert!(words.len() <= 16); // enforce the hardware limit
 
     unsafe {
         let timestamp = ((csr::rtio::now_hi_read() as i64) << 32) | (csr::rtio::now_lo_read() as i64);
         let mut data = dma_record_output_prepare(timestamp, target, words.len());
-        for word in words.as_ref().iter() {
+        for word in words.iter() {
             data[..4].copy_from_slice(&[
                 (word >>  0) as u8,
                 (word >>  8) as u8,

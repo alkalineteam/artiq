@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from math import ceil, log2
-from numpy import int32, int64
+from numpy import int32, int64, uint32
 from typing import Generic, TypeVar
 
 from artiq.language.core import *
@@ -9,11 +9,11 @@ from artiq.language.units import us, ns
 from artiq.coredevice.core import Core
 from artiq.coredevice.kasli_i2c import KasliEEPROM
 from artiq.coredevice.rtio import rtio_output, rtio_input_data
-from artiq.coredevice.spi2 import SPI_END, SPIMaster
+from artiq.coredevice import spi2 as spi
 from artiq.coredevice import ad9910, urukul, sampler
 from artiq.coredevice.ttl import TTLOut
-from artiq.coredevice.urukul import CPLD
-from artiq.coredevice.ad9910 import AD9910, STA_PROTO_REV_9, SyncDataUser as AD9910SyncData
+from artiq.coredevice.urukul import CPLD, STA_PROTO_REV_9
+from artiq.coredevice.ad9910 import AD9910, SyncDataUser as AD9910SyncData
 from artiq.coredevice.sampler import adc_mu_to_volt as sampler_adc_mu_to_volt, SPI_CONFIG as SAMPLER_SPI_CONFIG, SPI_CS_PGIA as SAMPLER_SPI_CS_PGIA
 
 
@@ -252,13 +252,13 @@ class SharedDDS(Generic[SyncDataT]):
         raise ValueError("IO_UPDATE-SYNC_CLK alignment edges are too broad")
 
     @portable
-    def frequency_to_ftw(self, frequency: float) -> int32:
+    def frequency_to_ftw(self, frequency: float) -> uint32:
         """Return the 32-bit frequency tuning word corresponding to the given
         frequency."""
         return self._inner_dds.frequency_to_ftw(frequency)
 
     @portable
-    def turns_to_pow(self, turns: float) -> int32:
+    def turns_to_pow(self, turns: float) -> uint32:
         """Return the 16-bit phase offset word corresponding to the given phase
         in turns."""
         return self._inner_dds.turns_to_pow(turns)
@@ -301,7 +301,7 @@ class SUServo(Generic[SyncDataT]):
     """
 
     core: KernelInvariant[Core]
-    pgia: KernelInvariant[SPIMaster]
+    pgia: KernelInvariant[spi.SPIMaster]
     ddses: KernelInvariant[list[SharedDDS[SyncDataT]]]
     cplds: KernelInvariant[list[CPLD[Auto]]]
     channel: KernelInvariant[int32]
@@ -372,7 +372,7 @@ class SUServo(Generic[SyncDataT]):
         self.core.delay(3.*us)  # pipeline flush
 
         self.pgia.set_config_mu(
-            SAMPLER_SPI_CONFIG | SPI_END,
+            SAMPLER_SPI_CONFIG | spi.SPI_END,
             16, 4, SAMPLER_SPI_CS_PGIA)
 
         io_update_delays = [ 0 for _ in self.cplds ]
@@ -683,7 +683,7 @@ class Channel(Generic[SyncDataT]):
         self.servo.write(addr + 1, 0)
 
     @kernel
-    def get_tracked_phase_accumulator(self) -> int32:
+    def get_tracked_phase_accumulator(self) -> uint32:
         """Reads the tracked phase accumulator of this channel.
         The tracked phase accumulator is an internal register that tracks the
         corresponding register of the corresponding DDS. Both registers are
@@ -699,7 +699,7 @@ class Channel(Generic[SyncDataT]):
         lo = self.servo.read(addr)
         self.core.break_realtime()
         hi = self.servo.read(addr + 1)
-        return (hi << 16) | (lo & 0xffff)
+        return uint32((hi << 16) | (lo & 0xffff))
 
     @kernel
     def clear_tracked_ftw(self):
@@ -713,7 +713,7 @@ class Channel(Generic[SyncDataT]):
         self.servo.write(addr + 1, 0)
 
     @kernel
-    def get_tracked_ftw(self) -> int32:
+    def get_tracked_ftw(self) -> uint32:
         """Reads the tracked frequency tuning word (FTW) of this channel.
 
         :return: The internally tracked FTW
@@ -723,10 +723,10 @@ class Channel(Generic[SyncDataT]):
         lo = self.servo.read(addr)
         self.core.break_realtime()
         hi = self.servo.read(addr + 1)
-        return (hi << 16) | (lo & 0xffff)
+        return uint32((hi << 16) | (lo & 0xffff))
 
     @kernel
-    def set_dds_mu(self, profile: int32, ftw: int32, offs: int32, pow_: int32 = 0):
+    def set_dds_mu(self, profile: int32, ftw: uint32, offs: int32, pow_: uint32 = uint32(0)):
         """Set profile DDS coefficients in machine units.
 
         See also :meth:`Channel.set_dds`.
@@ -737,10 +737,10 @@ class Channel(Generic[SyncDataT]):
         :param pow_: Phase offset word (16-bit)
         """
         base = ((self.servo_channel << PROFILE_WIDTH) | profile) << 3
-        self.servo.write(base + 6, ftw >> 16)
-        self.servo.write(base + 2, (ftw & 0xffff))
+        self.servo.write(base + 6, int32(ftw >> 16))
+        self.servo.write(base + 2, int32(ftw & uint32(0xffff)))
         self.set_dds_offset_mu(profile, offs)
-        self.servo.write(base, pow_)
+        self.servo.write(base, int32(pow_))
 
     @kernel
     def set_dds(self, profile: int32, frequency: float, offset: float, phase: float = 0.):

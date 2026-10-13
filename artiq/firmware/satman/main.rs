@@ -15,6 +15,7 @@ extern crate crc;
 extern crate cslice;
 extern crate io;
 extern crate eh;
+extern crate refcounting;
 
 use core::convert::TryFrom;
 use board_misoc::{csr, ident, clock, config, i2c, pmp};
@@ -922,9 +923,9 @@ fn startup() {
 
     #[cfg(has_i2c)]
     i2c::init().expect("I2C initialization failed");
-    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1rc1", hw_rev = "v2.1")))]
     let (mut io_expander0, mut io_expander1);
-    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1rc1", hw_rev = "v2.1")))]
     {
         io_expander0 = board_misoc::io_expander::IoExpander::new(0).unwrap();
         io_expander1 = board_misoc::io_expander::IoExpander::new(1).unwrap();
@@ -965,6 +966,11 @@ fn startup() {
         #[cfg(hw_rev = "v1.1")]
         {
             p3v3_fmc_en_pin = 1;
+            vadj_fmc_en_pin = 7;
+        }
+        #[cfg(hw_rev = "v1.2")]
+        {
+            p3v3_fmc_en_pin = 0;
             vadj_fmc_en_pin = 7;
         }
 
@@ -1041,7 +1047,7 @@ fn startup() {
             for rep in repeaters.iter_mut() {
                 rep.service(&routing_table, rank, destination, &mut router);
             }
-            #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+            #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1rc1", hw_rev = "v2.1")))]
             {
                 io_expander0.service().expect("I2C I/O expander #0 service failed");
                 io_expander1.service().expect("I2C I/O expander #1 service failed");
@@ -1086,7 +1092,7 @@ fn startup() {
             for rep in repeaters.iter_mut() {
                 rep.service(&routing_table, rank, destination, &mut router);
             }
-            #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+            #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1rc1", hw_rev = "v2.1")))]
             {
                 io_expander0.service().expect("I2C I/O expander #0 service failed");
                 io_expander1.service().expect("I2C I/O expander #1 service failed");
@@ -1155,6 +1161,11 @@ fn enable_error_led() {
     #[cfg(hw_rev = "v1.1")]
     {
         p3v3_fmc_en_pin = 1;
+        vadj_fmc_en_pin = 7;
+    }
+    #[cfg(hw_rev = "v1.2")]
+    {
+        p3v3_fmc_en_pin = 0;
         vadj_fmc_en_pin = 7;
     }
 

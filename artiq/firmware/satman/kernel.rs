@@ -1,5 +1,5 @@
 use alloc::{collections::btree_map::BTreeMap, format, string::String, vec::Vec};
-use core::{mem, str};
+use core::str;
 
 use board_artiq::{drtio_routing::RoutingTable, drtioaux, mailbox, spi};
 use board_misoc::{clock, csr, i2c};
@@ -899,14 +899,14 @@ impl Manager {
                 }
 
                 &kern::CacheGetRequest { key } => {
-                    let value = self.cache.get(key);
+                    let (value, len) = self.cache.get(key);
                     kern_send(&kern::CacheGetReply {
-                        value: unsafe { mem::transmute(value) },
+                        value, len
                     })
                 }
 
-                &kern::CachePutRequest { key, value } => {
-                    let succeeded = self.cache.put(key, value).is_ok();
+                &kern::CachePutRequest { key, value, len } => {
+                    let succeeded = self.cache.put(key, value, len).is_ok();
                     kern_send(&kern::CachePutReply {
                         succeeded: succeeded,
                     })

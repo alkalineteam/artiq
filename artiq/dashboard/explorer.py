@@ -158,6 +158,78 @@ class WaitingPanel(LayoutWidget):
         self.waiting_spinner.stop()
 
 
+class _ExperimentsNotInRepoDialog(QtWidgets.QDialog):
+    def __init__(self, explorer, delete, update_exparg, unused_expargs):
+        super().__init__(parent=explorer)
+        self.resize(710, 700)
+        self.setWindowTitle("Experiments Not in Repository")
+
+        grid = QtWidgets.QGridLayout()
+        self.setLayout(grid)
+
+        self.delete = delete
+        self.update_exparg = update_exparg
+
+        self.buttons = QtWidgets.QDialogButtonBox()
+        delete_button = self.buttons.addButton("Delete All", QtWidgets.QDialogButtonBox.ButtonRole.DestructiveRole)
+        delete_button.setIcon(QtWidgets.QApplication.style().standardIcon(
+                QtWidgets.QStyle.StandardPixmap.SP_DialogDiscardButton))
+        delete_button.clicked.connect(self.delete_all)
+        delete_button.setAutoDefault(False)
+
+        close_button = self.buttons.addButton(QtWidgets.QDialogButtonBox.StandardButton.Close)
+        close_button.clicked.connect(self.accept)
+        close_button.setDefault(True)
+        grid.addWidget(self.buttons, 1, 1)
+
+        self.list = QtWidgets.QTreeWidget()
+        self.list.setHeaderHidden(True)
+        self.list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        grid.addWidget(self.list, 0, 0, 1, 2)
+
+        self.list.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.ActionsContextMenu)
+        delete_action = QtGui.QAction("Delete argument", self.list)
+        delete_action.triggered.connect(self.delete_selected)
+        delete_action.setShortcut("Delete")
+        delete_action.setShortcutContext(QtCore.Qt.ShortcutContext.WidgetShortcut)
+        self.list.addAction(delete_action)
+
+        for k, v in unused_expargs.items():
+            parent_item = QtWidgets.QTreeWidgetItem(self.list)
+            parent_item.setText(0, f"{k}")
+            child_item = QtWidgets.QTreeWidgetItem(parent_item)
+            child_item.setText(0, f"{self.format_dict(v, 0)}")
+
+    def delete_all(self):
+        items = [self.list.topLevelItem(i) for i in range(self.list.topLevelItemCount())]
+        root = self.list.invisibleRootItem()
+        for item in items:
+            self.delete(item.text(0))
+            root.removeChild(item)
+        self.update_exparg()
+
+    def delete_selected(self):
+        root = self.list.invisibleRootItem()
+        expurls = set()
+        for item in self.list.selectedItems():
+            if item.parent() is not None:
+                item = item.parent()
+            expurls.add(item.text(0))
+            root.removeChild(item)
+        for expurl in expurls:
+            self.delete(expurl)
+        self.update_exparg()
+
+    def format_dict(self, arg_dict, level):
+        string = ""
+        for k, v in arg_dict.items():
+            if not isinstance(v, dict):
+                string += f"{(' ' * (level*2))}{k}: {v} \n"
+            else:
+                string += f"{(' ' * (level*2))}{k}: \n" + self.format_dict(v, level + 1)
+        return string
+
+
 class ExplorerDock(QtWidgets.QDockWidget):
     def __init__(self, exp_manager, d_shortcuts,
                  explist_sub, explist_status_sub,
@@ -268,6 +340,31 @@ class ExplorerDock(QtWidgets.QDockWidget):
                                     experiment_db_ctl).open())
         self.el.addAction(open_file_action)
 
+        self.unused_expargs = dict()
+
+        self.exp_manager.update_exparg = self.update_exparg
+
+        def show_arguments():
+            _ExperimentsNotInRepoDialog(self, exp_manager.delete_argument, self.update_exparg, self.unused_expargs).open()
+
+        state_arguments_action = QtGui.QAction("Saved experiments not in repository", self.el)
+        state_arguments_action.triggered.connect(show_arguments)
+        self.el.addAction(state_arguments_action)
+
+        self.experiment_button = QtWidgets.QPushButton(f"Experiment Args to Delete: {len(self.unused_expargs)}")
+        self.experiment_button.setFlat(True)
+        self.experiment_button.setIcon(QtWidgets.QApplication.style().standardIcon(
+            QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning))
+        self.experiment_button.clicked.connect(show_arguments)
+        top_widget.addWidget(self.experiment_button, 2, 0, 1, 2)
+        self.experiment_button.setStyleSheet("""
+            QPushButton {
+                color: palette(placeholder-text);
+                margin: 0px;
+                padding: 0px;
+            }
+        """)
+
         self.waiting_panel = WaitingPanel()
         self.stack.addWidget(self.waiting_panel)
         explist_status_sub.add_setmodel_callback(
@@ -290,6 +387,17 @@ class ExplorerDock(QtWidgets.QDockWidget):
             action = getattr(self.exp_manager, action)
             action("repo:" + expname)
 
+    def update_exparg(self):
+        self.unused_expargs = dict()
+        for k, v in self.exp_manager.submission_arguments.items():
+            if k[5:] not in self.explist_model.backing_store:
+                self.unused_expargs[k] = v
+        if self.unused_expargs:
+            self.experiment_button.setText(f"Experiment Args to Delete: {len(self.unused_expargs)}")
+            self.experiment_button.setVisible(True)
+        else:
+            self.experiment_button.setVisible(False)
+
     def set_shortcut(self, nr):
         expname = self._get_selected_expname()
         if expname is not None:
@@ -304,6 +412,7 @@ class ExplorerDock(QtWidgets.QDockWidget):
         else:
             self.stack.setCurrentWidget(self.el_buttons)
             self.waiting_panel.stop()
+            self.update_exparg()
 
     def update_cur_rev(self, cur_rev):
         self.revision.setText(cur_rev)
