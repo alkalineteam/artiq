@@ -20,6 +20,8 @@ __pycache__/
 /artiq/firmware/target/
 /misoc_*/
 /artiq_*/
+/flash
+storage.img
 
 /artiq/test/results
 /artiq/examples/*/results
