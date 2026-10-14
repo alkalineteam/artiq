@@ -1,6 +1,6 @@
 #![no_std]
 
-use core::{mem::size_of, slice};
+use core::{mem::size_of, slice, str};
 
 /// The object header prefixed to all composite objects, i.e. structs and tuples.
 #[repr(C)]
@@ -67,18 +67,40 @@ pub struct RawList<T> {
     pub len: u32,
 }
 
+impl<T> RawList<T> {
+    pub fn as_slice(&self) -> &[T] {
+        unsafe { (*self.items).inner.as_slice(self.len as usize) }
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        unsafe { (*self.items).inner.as_mut_slice(self.len as usize) }
+    }
+
+    pub fn get_backing_array(&self) -> Option<&RefCounted<RefAwareArray<T>>> {
+        unsafe { self.items.as_ref() }
+    }
+}
+
 pub type List<T> = RefCounted<RawList<T>>;
 
 impl<T> List<T> {
     pub fn as_slice(&self) -> &[T] {
-        unsafe { (*self.inner.items).inner.as_slice(self.inner.len as usize) }
+        self.inner.as_slice()
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        unsafe { (*self.inner.items).inner.as_mut_slice(self.inner.len as usize) }
+        self.inner.as_mut_slice()
     }
 
     pub fn get_backing_array(&self) -> Option<&RefCounted<RefAwareArray<T>>> {
-        unsafe { self.inner.items.as_ref() }
+        self.inner.get_backing_array()
+    }
+}
+
+pub type String = RawList<u8>;
+
+impl String {
+    pub fn as_str(&self) -> &str {
+        str::from_utf8(self.as_slice()).unwrap()
     }
 }
