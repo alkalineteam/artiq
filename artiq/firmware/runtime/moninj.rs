@@ -109,12 +109,10 @@ macro_rules! dispatch {
     ($io:ident, $aux_mutex:ident, $ddma_mutex:ident, $subkernel_mutex:ident, $routing_table:ident, $channel:expr, $func:ident $(, $param:expr)*) => {{
         let destination = ($channel >> 16) as u8;
         let channel = $channel as u16;
-        let hop = $routing_table.0[destination as usize][0];
-        if hop == 0 {
-            local_moninj::$func(channel, $($param, )*)
-        } else {
-            let linkno = hop - 1;
+        if let Some(linkno) = $routing_table.get_linkno(destination, 0) {
             remote_moninj::$func($io, $aux_mutex, $ddma_mutex, $subkernel_mutex, $routing_table, linkno, destination, channel, $($param, )*)
+        } else {
+            local_moninj::$func(channel, $($param, )*)
         }
     }}
 }

@@ -1,7 +1,21 @@
 Installing ARTIQ
 ================
 
-M-Labs recommends installing ARTIQ through Nix (on Linux) or MSYS2 (on Windows). It is also possible to use Conda (on either platform), but this is not preferred, and likely to become unsupported in the near future.
+.. Version-specific data is substituted from 'version_specific' dict in conf.py
+.. For a new branch or major version release, edit the values there!
+
+The supported operating systems and ways to install ARTIQ are:
+
+  * Linux, using the Nix package manager
+  * Windows, using the MSYS2 software distribution
+  * OpenBSD, using the native ports system
+
+However, ARTIQ is designed with portability in mind, and the community has found other ways to install all or parts of ARTIQ on other systems, for example on macOS or WSL. Search `the ARTIQ/Sinara forum <https://forum.m-labs.hk/>`_ for details. The officially supported methods are described here.
+
+.. warning::
+  Before following these instructions, make sure that you know whether you want to install the beta, stable, or legacy versions of ARTIQ. Major versions are not interchangeable. In particular, your software version should match the gateware version of the core device you intend to use. See also :doc:`releases` for a description of the ARTIQ release model.
+
+  This is the **|channel|** version of the manual, and these instructions will install |channel| ARTIQ, which is currently **ARTIQ-|major_version|**.
 
 Installing via Nix (Linux)
 --------------------------
@@ -20,7 +34,7 @@ User environment installation
 
 There are few options for accessing ARTIQ through Nix. The easiest way is to install it into the user environment: ::
 
-  $ nix profile install "git+https://git.m-labs.hk/M-Labs/artiq.git?ref=release-9"
+  $ nix profile install |artiq_flake|
 
 Answer "Yes" to the questions about setting Nix configuration options (for more details see :ref:`installing-details` below.) You should now have a minimal installation of ARTIQ, where the usual front-end commands (:mod:`~artiq.frontend.artiq_run`, :mod:`~artiq.frontend.artiq_master`, :mod:`~artiq.frontend.artiq_dashboard`, etc.) are all available to you.
 
@@ -34,7 +48,7 @@ Flake custom environments
 Modifying the environment and making additional packages visible to the ARTIQ commands requires using the Nix language and writing your own flake. Create an empty directory with a file ``flake.nix`` containing the following: ::
 
   {
-    inputs.extrapkg.url = "git+https://git.m-labs.hk/M-Labs/artiq-extrapkg.git?ref=release-9";
+    inputs.extrapkg.url = "|extrapkg_flake|";
     outputs = { self, extrapkg }:
       let
         pkgs = extrapkg.pkgs;
@@ -98,9 +112,9 @@ To spawn a shell in this environment, navigate to the directory containing the `
 
 The resulting shell will have access to ARTIQ as well as any additional packages you may have added. You can exit this shell at any time with CTRL+D or with the command ``exit``. Note that a first execution of ``nix shell`` on a given flake may take some time; repetitions of the same command will use stored versions of packages and run much more quickly.
 
-You might be interested in creating multiple directories containing separate ``flake.nix`` files to represent different sets of packages for different purposes. If you are familiar with Conda, using Nix in this way is similar to having multiple Conda environments.
+You might be interested in creating multiple directories containing separate ``flake.nix`` files to represent different sets of packages for different purposes.
 
-To find more packages you can browse the `Nix package search <https://search.nixos.org/packages>`_ website. If your favorite package is not available with Nix, contact M-Labs using the helpdesk@ email.
+To find more packages you can browse the `Nix package search <https://search.nixos.org/packages>`_ website. If your favorite package is not available with Nix, contact M-Labs by email at helpdesk@m-labs.hk.
 
 .. note::
 
@@ -177,13 +191,13 @@ This will set your user as a trusted user, allowing you to specify untrusted sub
 Installing via MSYS2 (Windows)
 ------------------------------
 
-We recommend using our `offline installer <https://nixbld.m-labs.hk/job/artiq/extra/msys2-offline-installer/latest>`_, which contains all the necessary packages and requires no additional configuration. After installation, simply launch ``MSYS2 with ARTIQ`` from the Windows Start menu.
+M-Labs recommends using our own `offline installer <|msys2_installer_link|>`_, which contains all the necessary packages, sets up MSYS2 to use the native Windows console (see note below), and requires no additional configuration. After installation, simply launch ``MSYS2 with ARTIQ`` from the Windows Start menu.
 
 Alternatively, you may install `MSYS2 <https://msys2.org>`_, then edit ``C:\msys64\etc\pacman.conf`` and add at the end: ::
 
     [artiq]
     SigLevel = Optional TrustAll
-    Server = https://msys2.m-labs.hk/artiq
+    Server = |msys2_server|
 
 Launch ``MSYS2 CLANG64`` from the Windows Start menu to open the MSYS2 shell, and enter the following commands: ::
 
@@ -194,39 +208,23 @@ As above in the Nix section, you may find yourself wanting to add other useful p
 
   $ pacman -S <package name>
 
-For more see the `MSYS2 documentation <https://www.msys2.org/docs/package-management/>`_ on package management. If your favorite package is not available with MSYS2, contact M-Labs using the helpdesk@ email.
-
-Installing via Conda [DEPRECATED]
----------------------------------
-
-.. warning::
-  Installing ARTIQ via Conda is not recommended. Instead, Linux users should install it via Nix and Windows users should install it via MSYS2. Conda support may be removed in future ARTIQ releases and M-Labs can only provide very limited technical support for Conda.
-
-First, install `Anaconda <https://www.anaconda.com/download>`_ or the more minimalistic `Miniconda <https://conda.io/en/latest/miniconda.html>`_. After installing either Anaconda or Miniconda, open a new terminal and verify that the following command works::
-
-    $ conda
-
-Executing just ``conda`` should print the help of the ``conda`` command. If your shell cannot find the ``conda`` command, make sure that the Conda binaries are in your ``$PATH``. If ``$ echo $PATH`` does not show the Conda directories, add them: execute e.g. ``$ export PATH=$HOME/miniconda3/bin:$PATH`` if you installed Conda into ``~/miniconda3``.
-
-Controllers for third-party devices (e.g. Thorlabs TCube, Lab Brick Digital Attenuator, etc.) that are not shipped with ARTIQ can also be installed with this script. Browse `Hydra <https://nixbld.m-labs.hk/project/artiq>`_ or see the list of NDSPs in this manual to find the names of the corresponding packages, and list them at the beginning of the script.
-
-Set up the Conda channel and install ARTIQ into a new Conda environment: ::
-
-    $ conda config --prepend channels https://conda.m-labs.hk/artiq
-    $ conda config --append channels conda-forge
-    $ conda create -n artiq artiq
+For more see the `MSYS2 documentation <https://www.msys2.org/docs/package-management/>`_ on package management. If your favorite package is not available with MSYS2, contact M-Labs by email at helpdesk@m-labs.hk.
 
 .. note::
-  On Windows, if the last command that creates and installs the ARTIQ environment fails with an error similar to "seeking backwards is not allowed", try re-running the command with admin rights.
+  MSYS2 by default runs on a `mintty <https://mintty.github.io/>`_ terminal. Mintty does not own a real Windows console, so processes started from it (``artiq_session``, ``artiq_ctlmgr``, etc.) may be left running in the background instead of shutting down cleanly when the window is closed (see `msys2-runtime#267 <https://github.com/msys2/msys2-runtime/issues/267>`_).
 
-.. note::
-  For commercial use you might need a license for Anaconda/Miniconda or for using the Anaconda package channel. `Miniforge <https://github.com/conda-forge/miniforge>`_ might be an alternative in a commercial environment as it does not include the Anaconda package channel by default. If you want to use Anaconda/Miniconda/Miniforge in a commercial environment, please check the license and the latest terms of service.
+  To avoid mintty, use the native Windows shell instead. Open a Windows Command Prompt and run: ::
 
-After the installation, activate the newly created environment by name. ::
+    C:\msys64\msys2_shell.cmd -defterm -no-start -clang64
 
-    $ conda activate artiq
+  To make this permanent, create a new shortcut with the above command as its target, then pin it to the Start Menu or taskbar.
 
-This activation has to be performed in every new shell you open to make the ARTIQ tools from that environment available.
+  MSYS2 installations obtained via the ARTIQ offline installer are not affected, as they use the native Windows console by default.
+
+Installing on OpenBSD
+---------------------
+
+See the `M-Labs OpenBSD ports repository <https://git.m-labs.hk/M-Labs/openbsd-ports>`_ and follow the instructions there to install the ``misc/artiq`` port.
 
 .. _installing-upgrading:
 
@@ -234,29 +232,45 @@ Upgrading ARTIQ
 ---------------
 
 .. note::
-    When you upgrade ARTIQ, as well as updating the software on your host machine, it may also be necessary to reflash the gateware and firmware of your core device (and in some cases the gateware and firmware of DRTIO peripherals) to keep them compatible. New numbered release versions in particular incorporate breaking changes and are not generally compatible. See :doc:`flashing` for instructions.
+  When you upgrade ARTIQ, as well as updating the software on your host machine, it may also be necessary to reflash the gateware and firmware of your core device (and in some cases the gateware and firmware of DRTIO peripherals) to keep them compatible. If you are using stable or legacy versions, this only applies to major version upgrades. When upgrading within a version, reflashing should never be necessary for compatibility. You might still chose to reflash to incorporate bugfixes to gateware or firmware, but this does not require a software upgrade.
+
+  If you are using a beta version of ARTIQ, minor version upgrades may also cover large changes and require reflashing. See :doc:`flashing`, and remember to back up legacy binaries if reproducability is important to you.
 
 Upgrading with Nix
 ^^^^^^^^^^^^^^^^^^
 
-Run ``$ nix profile upgrade`` if you installed ARTIQ into your user profile. If you use a ``flake.nix`` shell environment, make a back-up copy of the ``flake.lock`` file to enable rollback, then run ``$ nix flake update`` and re-enter the environment with ``$ nix shell``. If you use multiple flakes, each has its own ``flake.lock`` and can be updated or rolled back separately.
+For minor version upgrades, run ``nix profile upgrade`` if you installed ARTIQ into your user profile. If you use a ``flake.nix`` shell environment, make a back-up copy of the ``flake.lock`` file to enable rollback, then run ``nix flake update`` and re-enter the environment with ``nix shell``. If you use multiple flakes, each has its own ``flake.lock`` and can be updated or rolled back separately.
 
-To rollback to the previous version, respectively use ``$ nix profile rollback`` or restore the backed-up versions of the ``flake.lock`` files.
+To rollback to a previous version, respectively use ``nix profile rollback`` or restore the backed-up versions of the ``flake.lock`` files.
+
+For major version upgrades, regardless of installation method, it is generally necessary to update the source URL your installation references. The exception is upgrading your beta installation to a new beta installation after a major release; since the beta channel is not tied to a release number like the stable channels, you can simply follow the instructions for a minor version upgrade above.
+
+In profile installations, you will want to update the URL you used with ``nix profile install``; the easiest way to do this is simply by removing your existing installation and re-running ``nix profile install`` with the new source. To find the correct URL, it's best to check the installation instructions for your desired channel in an *up-to-date* version of the manual, but as a rule releases are specified as follows: ::
+
+  git+https://git.m-labs.hk/M-Labs/artiq.git?ref=release-<number>
+
+except to install the current beta, for which you can leave out ``?ref=release-<number>`` entirely.
+
+.. note::
+  Backing up a Nix profile install is less intuitive. One option is to run ``nix profile list``, find your ARTIQ installation, and save the URL labeled ``Locked flake URL``. This is the precise commit your current profile install is based on, and using this URL with ``nix profile install`` will recreate your current installation, regardless of future upgrades or version changes.
+
+If you use a ``flake.nix`` shell environment, you can update the source in the same way by adding or removing ``?ref=release-<number>`` from the line beginning with ``inputs.extrapkg.url``. Back up both ``flake.nix`` and ``flake.lock``, as ``flake.lock`` will be updated automatically. If you use multiple flakes, the source must be specified per flake; it is possible to use multiple ARTIQ versions in parallel by entering and exiting shells from different flakes.
 
 Upgrading with MSYS2
 ^^^^^^^^^^^^^^^^^^^^
 
 Run ``pacman -Syu`` to update all MSYS2 packages, including ARTIQ. If you get a message telling you that the shell session must be restarted after a partial update, open the shell again after the partial update and repeat the command. See the `MSYS2 <https://www.msys2.org/docs/updating/>`__ and `Pacman <https://wiki.archlinux.org/title/Pacman>`_ manuals for more information, including how to update individual packages if required.
 
-Upgrading with Conda
-^^^^^^^^^^^^^^^^^^^^
+MSYS2 installations are linked to channel, not to a numbered release, so if a new major version has been released, this will perform a major version upgrade. Alternatively, you may want to switch *channels;* to do this, re-download and run the installer for your desired channel. Respectively, the legacy installer can be found `here <https://nixbld.m-labs.hk/job/artiq/extra-legacy/msys2-offline-installer/latest>`_, the stable installer can be found `here <https://nixbld.m-labs.hk/job/artiq/extra/msys2-offline-installer/latest>`_, and the beta installer can be found `here <https://nixbld.m-labs.hk/job/artiq/extra-beta/msys2-offline-installer/latest>`_.
 
-When upgrading ARTIQ or when testing different versions it is recommended that new Conda environments are created instead of upgrading the packages in existing environments. As a rule, keep previous environments around unless you are certain that they are no longer needed and the new environment is working correctly.
+Alternatively, you can update the server URL in ``C:\msys64\etc\pacman.conf``; the three channels are hosted at ::
 
-To install the latest version, simply select a different environment name and run the installation commands again.
+  https://msys2.m-labs.hk/artiq-legacy
+  https://msys2.m-labs.hk/artiq
+  https://msys2.m-labs.hk/artiq-beta
 
-Switching between Conda environments using commands such as ``$ conda deactivate artiq-7`` and ``$ conda activate artiq-8`` is the recommended way to roll back to previous versions of ARTIQ.
+Once you have changed servers, open a MSYS2 shell and run the command ::
 
-You can list the environments you have created using::
+  $  pacman -Syuu
 
-    $ conda env list
+to upgrade or downgrade all packages to the new channel.

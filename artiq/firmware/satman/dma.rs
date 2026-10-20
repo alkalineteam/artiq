@@ -184,7 +184,7 @@ pub struct Manager {
     remote_entries: BTreeMap<u32, RemoteTraces>,
     name_map: BTreeMap<String, u32>,
     recording_trace: Vec<u8>,
-    recording_name: String
+    recording_name: String,
 }
 
 impl Manager {
@@ -257,7 +257,7 @@ impl Manager {
     }
 
     // API for subkernel
-    pub fn record_stop(&mut self, duration: u64, self_destination: u8) -> Result<u32, Error> {
+    pub fn record_stop(&mut self, duration: u64, self_destination: u8, master_destination: u8) -> Result<u32, Error> {
         let mut trace = Vec::new();
         mem::swap(&mut self.recording_trace, &mut trace);
         trace.push(0);
@@ -271,7 +271,7 @@ impl Manager {
             // ptr + 3 = tgt >> 24 (destination)
             let len = trace[ptr] as usize;
             let destination = trace[ptr+3];
-            if destination == 0 {
+            if destination == master_destination {
                 return Err(Error::MasterDmaFound);
             } else if destination == self_destination {
                 local_trace.extend(&trace[ptr..ptr+len]);

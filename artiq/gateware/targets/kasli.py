@@ -75,13 +75,14 @@ class StandaloneBase(MiniSoC, AMPSoC):
                          ethmac_ntxslots=4,
                          clk_freq=kwargs.get("rtio_frequency", 125.0e6),
                          rtio_sys_merge=True,
+                         gateware_bin_file=True,
                          **kwargs)
         AMPSoC.__init__(self)
         add_identifier(self, gateware_identifier_str=gateware_identifier_str)
 
         self.config["DRTIO_ROLE"] = "standalone"
 
-        if self.platform.hw_rev in ("v2.0", "v2.1"):
+        if self.platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1"):
             self.submodules.error_led = gpio.GPIOOut(Cat(
                 self.platform.request("error_led")))
             self.csr_devices.append("error_led")
@@ -122,7 +123,7 @@ class StandaloneBase(MiniSoC, AMPSoC):
             self.config["HAS_SI549"] = None
             self.config["WRPLL_REF_CLK"] = "SMA_CLKIN"
         else:
-            if self.platform.hw_rev in ("v2.0", "v2.1"):
+            if self.platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1"):
                 self.submodules += SMAClkinForward(self.platform)
             self.config["HAS_SI5324"] = None
             self.config["SI5324_SOFT_RESET"] = None
@@ -184,13 +185,14 @@ class MasterBase(MiniSoC, AMPSoC):
                          ethmac_ntxslots=4,
                          clk_freq=rtio_clk_freq,
                          rtio_sys_merge=True,
+                         gateware_bin_file=True,
                          **kwargs)
         AMPSoC.__init__(self)
         add_identifier(self, gateware_identifier_str=gateware_identifier_str)
 
         platform = self.platform
 
-        if platform.hw_rev in ("v2.0", "v2.1"):
+        if platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1"):
             self.submodules.error_led = gpio.GPIOOut(Cat(
                 self.platform.request("error_led")))
             self.csr_devices.append("error_led")
@@ -216,7 +218,7 @@ class MasterBase(MiniSoC, AMPSoC):
             self.config["HAS_SI549"] = None
             self.config["WRPLL_REF_CLK"] = "SMA_CLKIN"
         else:
-            if platform.hw_rev in ("v2.0", "v2.1"):
+            if platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1"):
                 self.submodules += SMAClkinForward(self.platform)
             self.config["HAS_SI5324"] = None
             self.config["SI5324_SOFT_RESET"] = None
@@ -227,7 +229,7 @@ class MasterBase(MiniSoC, AMPSoC):
         if enable_sata:
             drtio_data_pads.append(platform.request("sata"))
         drtio_data_pads += [platform.request("sfp", i) for i in range(1, 3)]
-        if self.platform.hw_rev in ("v2.0", "v2.1"):
+        if self.platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1"):
             drtio_data_pads.append(platform.request("sfp", 3))
 
         if self.platform.hw_rev in ("v1.0", "v1.1"):
@@ -248,7 +250,7 @@ class MasterBase(MiniSoC, AMPSoC):
         if self.platform.hw_rev in ("v1.0", "v1.1"):
             self.comb += [sfp_ctl.led.eq(channel.rx_ready)
                 for sfp_ctl, channel in zip(sfp_ctls, sfp_channels)]
-        if self.platform.hw_rev in ("v2.0", "v2.1"):
+        if self.platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1"):
             self.comb += [self.virtual_leds.get(i + 1).eq(channel.rx_ready)
                           for i, channel in enumerate(sfp_channels)]
 
@@ -374,7 +376,7 @@ class MasterBase(MiniSoC, AMPSoC):
     # Never running out of stupid features, GTs on A7 make you pack
     # unrelated transceiver PLLs into one GTPE2_COMMON yourself.
     def create_qpll(self):
-        if self.platform.hw_rev in ("v2.0", "v2.1"):
+        if self.platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1"):
             cdr_clk_out = self.platform.request("cdr_clk_clean")
         else:
             cdr_clk_out = self.platform.request("si5324_clkout")
@@ -433,18 +435,19 @@ class SatelliteBase(BaseSoC, AMPSoC):
                  l2_line_size=64,
                  clk_freq=rtio_clk_freq,
                  rtio_sys_merge=True,
+                 gateware_bin_file=True,
                  **kwargs)
         AMPSoC.__init__(self)
         add_identifier(self, gateware_identifier_str=gateware_identifier_str)
 
         platform = self.platform
 
-        if self.platform.hw_rev in ("v2.0", "v2.1"):
+        if self.platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1"):
             self.submodules.error_led = gpio.GPIOOut(Cat(
                 self.platform.request("error_led")))
             self.csr_devices.append("error_led")
 
-        if self.platform.hw_rev in ("v2.0", "v2.1"):
+        if self.platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1"):
             cdr_clk_out = self.platform.request("cdr_clk_clean")
         else:
             cdr_clk_out = self.platform.request("si5324_clkout")
@@ -471,7 +474,7 @@ class SatelliteBase(BaseSoC, AMPSoC):
         if enable_sata:
             drtio_data_pads.append(platform.request("sata"))
         drtio_data_pads += [platform.request("sfp", i) for i in range(3)]
-        if self.platform.hw_rev in ("v2.0", "v2.1"):
+        if self.platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1"):
             drtio_data_pads.append(platform.request("sfp", 3))
 
         if self.platform.hw_rev in ("v1.0", "v1.1"):
@@ -491,7 +494,7 @@ class SatelliteBase(BaseSoC, AMPSoC):
         if self.platform.hw_rev in ("v1.0", "v1.1"):
             self.comb += [sfp_ctl.led.eq(channel.rx_ready)
                 for sfp_ctl, channel in zip(sfp_ctls, sfp_channels)]
-        if self.platform.hw_rev in ("v2.0", "v2.1"):
+        if self.platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1"):
             self.comb += [self.virtual_leds.get(i).eq(channel.rx_ready)
                           for i, channel in enumerate(sfp_channels)]
 
@@ -564,7 +567,7 @@ class SatelliteBase(BaseSoC, AMPSoC):
             self.config["WRPLL_REF_CLK"] = "GT_CDR"
         else:
             self.submodules.siphaser = SiPhaser7Series(
-                si5324_clkin=platform.request("cdr_clk") if platform.hw_rev in ("v2.0", "v2.1")
+                si5324_clkin=platform.request("cdr_clk") if platform.hw_rev in ("v2.0", "v2.1rc1", "v2.1")
                     else platform.request("si5324_clkin"),
                 rx_synchronizer=self.rx_synchronizer,
                 ref_clk=self.crg.clk125_div2, ref_div2=True,
@@ -673,10 +676,7 @@ class GenericStandalone(StandaloneBase):
             with_wrpll=description["enable_wrpll"],
             **kwargs)
         self.config["RTIO_FREQUENCY"] = "{:.1f}".format(description["rtio_frequency"]/1e6)
-        if "ext_ref_frequency" in description:
-            self.config["SI5324_EXT_REF"] = None
-            self.config["EXT_REF_FREQUENCY"] = "{:.1f}".format(
-                description["ext_ref_frequency"]/1e6)
+        
         if hw_rev == "v1.0":
             # EEM clock fan-out from Si5324, not MMCX
             self.comb += self.platform.request("clk_sel").eq(1)
@@ -687,7 +687,7 @@ class GenericStandalone(StandaloneBase):
 
         self.rtio_channels = []
         eem_7series.add_peripherals(self, description["peripherals"])
-        if hw_rev == "v2.1":
+        if hw_rev in ("v2.1rc1", "v2.1"):
             self.comb += self.platform.request("eem_power_en").eq(1)
         if hw_rev in ("v1.0", "v1.1"):
             for i in (1, 2):
@@ -696,7 +696,7 @@ class GenericStandalone(StandaloneBase):
                 phy = ttl_simple.Output(sfp_ctl.led)
                 self.submodules += phy
                 self.rtio_channels.append(rtio.Channel.from_phy(phy))
-        if hw_rev in ("v1.1", "v2.0", "v2.1"):
+        if hw_rev in ("v1.1", "v2.0", "v2.1rc1", "v2.1"):
             for i in range(3):
                 print("USER LED at RTIO channel 0x{:06x}".format(len(self.rtio_channels)))
                 phy = ttl_simple.Output(self.platform.request("user_led", i))
@@ -730,10 +730,7 @@ class GenericMaster(MasterBase):
             enable_sys5x=has_drtio_over_eem,
             with_wrpll=description["enable_wrpll"],
             **kwargs)
-        if "ext_ref_frequency" in description:
-            self.config["SI5324_EXT_REF"] = None
-            self.config["EXT_REF_FREQUENCY"] = "{:.1f}".format(
-                description["ext_ref_frequency"]/1e6)
+    
         if hw_rev == "v1.0":
             # EEM clock fan-out from Si5324, not MMCX
             self.comb += self.platform.request("clk_sel").eq(1)
@@ -746,9 +743,9 @@ class GenericMaster(MasterBase):
 
         self.rtio_channels = []
         eem_7series.add_peripherals(self, description["peripherals"])
-        if hw_rev == "v2.1":
+        if hw_rev in ("v2.1rc1", "v2.1"):
             self.comb += self.platform.request("eem_power_en").eq(1)
-        if hw_rev in ("v1.1", "v2.0", "v2.1"):
+        if hw_rev in ("v1.1", "v2.0", "v2.1rc1", "v2.1"):
             for i in range(3):
                 print("USER LED at RTIO channel 0x{:06x}".format(len(self.rtio_channels)))
                 phy = ttl_simple.Output(self.platform.request("user_led", i))
@@ -797,9 +794,9 @@ class GenericSatellite(SatelliteBase):
 
         self.rtio_channels = []
         eem_7series.add_peripherals(self, description["peripherals"])
-        if hw_rev == "v2.1":
+        if hw_rev in ("v2.1rc1", "v2.1"):
             self.comb += self.platform.request("eem_power_en").eq(1)
-        if hw_rev in ("v1.1", "v2.0", "v2.1"):
+        if hw_rev in ("v1.1", "v2.0", "v2.1rc1", "v2.1"):
             for i in range(3):
                 print("USER LED at RTIO channel 0x{:06x}".format(len(self.rtio_channels)))
                 phy = ttl_simple.Output(self.platform.request("user_led", i))

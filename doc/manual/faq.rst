@@ -58,10 +58,10 @@ Some things to consider:
 
     - Is the ``core_addr`` field of your ``device_db.py`` set correctly?
     - Did your device flash and boot successfully? Were the binaries generated for the correct board hardware version?
-    - Are your core device's IP address and networking configurations definitely set correctly? Check the UART log to confirm, and talk to your network administrator about what the correct choices are.
+    - Are your core device's IP address and further networking configuration values definitely set correctly? Check the UART log to confirm, and talk to your network administrator about what the correct choices are.
+    - In particular, are your PC and your crate in the same subnet? If not, have you set a default gateway? See :ref:`networking-details`, and again talk to your network administrator.
     - Is your core device configured for an external reference clock? If so, it cannot function correctly without one. Is the external reference clock plugged in?
     - Are Ethernet and (on Kasli only) SFP0 plugged in all the way? Are they working? Try different cables and SFP adapters; M-Labs tests with CAT6 cables, but lower categories should be supported too.
-    - Are your PC and your crate in the same subnet?
     - Is some other device in your network already using the configured IP address? Turn off the core device and try pinging the configured IP address; if it responds, you have a culprit. One of the two will need a different networking configuration.
     - Are there restrictions or issues in your router or subnet that are preventing the core device from connecting? It may help to try connecting the core device to your PC directly.
 
@@ -84,6 +84,8 @@ fix unreliable DRTIO master-satellite links?
 --------------------------------------------
 
 Inconsistent DRTIO connections, especially with odd or absent errors in the core logs, are often a symptom of overheating either in the master or satellite boards. Check the core device fans for failure or defects. Improve air circulation around the crate or attach additional fans to see if that improves or resolves the issue. In the long term, fan trays to be rack-mounted together with the crate are a clean solution to these kinds of problems.
+
+Alternatively, if the problem is a DRTIO-over-EEM connection which is no longer able to successfully establish a link, it's possible the connection simply needs to be recalibrated, especially if you've changed something about your system configuration recently. This calibration is only necessary for DRTIO-over-EEM and cannot be a problem for standard DRTIO links. See the warning in :ref:`drtio-eem-clock-skew`.
 
 fix delay between DRTIO master and satellite cores?
 ---------------------------------------------------
@@ -333,12 +335,14 @@ For more advanced questions, sometimes the `list of publications <https://m-labs
 "Help, I've done my best and I can't get any further!"
 ------------------------------------------------------
 
-- If you have an active M-Labs AFWS/support subscription, you can email helpdesk@ at any time for personalized assistance. Please include the following information:
+- If you have an active M-Labs AFWS/support subscription, you can email helpdesk@m-labs.hk at any time for personalized assistance. Please include the following information:
 
     - Your installed ARTIQ version (add ``--version`` to any of the standard ARTIQ commands)
     - The variant name of your system (refer to the sticker on the crate if you aren't sure)
     - The recent output of your core log, either through ``artiq_coremgmt`` (if you're able to contact your device by network), or over UART following :ref:`the guide here <connecting-UART>`
     - How your problem happened, and what you've already tried to fix it
+
+You should receive an immediate confirmation with a ticket number after sending your helpdesk email. If not, the most likely cause is your organization's email system blocks emails to and/or from Hong Kong. To work around this problem, write to helpdesk@m-labs-intl.com instead.
 
 - Compare your materials with the examples; see also :ref:`finding ARTIQ examples <faq-find-examples>` above.
 - Check the list of `active issues <https://git.m-labs.hk/M-Labs/artiq/issues>`_ on the ARTIQ Gitea repository for possible known problems with ARTIQ. Search through the closed issues to see if your question or concern has been addressed before.

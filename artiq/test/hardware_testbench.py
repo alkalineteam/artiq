@@ -7,9 +7,10 @@ import unittest
 import logging
 from tempfile import TemporaryDirectory
 
+from nac3artiq import CompileError
+
 from artiq.master.databases import DeviceDB, DatasetDB
 from artiq.master.worker_db import DeviceManager, DatasetManager, DeviceError
-from artiq.coredevice.core import CompileError
 from artiq.frontend.artiq_run import DummyScheduler
 
 

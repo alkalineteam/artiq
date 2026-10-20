@@ -1,100 +1,15 @@
-import re
+import unittest
+import linecache
+
+from numpy import int32
+
+import nac3artiq
 
 from artiq.experiment import *
-from artiq.master.worker_db import DeviceError
 from artiq.test.hardware_testbench import ExperimentCase
-from artiq.compiler.embedding import EmbeddingMap
-from artiq.coredevice.core import test_exception_id_sync
+from artiq.coredevice.core import Core, test_exception_id_sync
+from artiq.coredevice.dma import CoreDMA
 import artiq.coredevice.exceptions as exceptions
-
-
-class CustomException(Exception):
-    pass
-
-
-class KernelFmtException(EnvExperiment):
-    def build(self):
-        self.setattr_device("core")
-
-    @kernel
-    def run(self):
-        self.throw()
-
-    def throw(self):
-        raise CustomException("{foo}")
-
-
-class KernelNestedFmtException(EnvExperiment):
-    def build(self):
-        self.setattr_device("core")
-
-    @kernel
-    def run(self):
-        try:
-            self.throw_foo()
-        except:
-            try:
-                raise RTIOUnderflow("{bar}")
-            except:
-                try:
-                    raise RTIOOverflow("{bizz}")
-                except:
-                    self.throw_buzz()
-
-    def throw_foo(self):
-        raise CustomException("{foo}")
-
-    def throw_buzz(self):
-        raise RTIOUnderflow("{buzz}")
-
-
-class KernelRTIOUnderflow(EnvExperiment):
-    def build(self):
-        self.setattr_device("core")
-        try:
-            self.setattr_device("led")
-        except DeviceError:
-            self.led = self.get_device("led0")
-
-    @kernel
-    def run(self):
-        self.core.reset()
-        at_mu(self.core.get_rtio_counter_mu() - 1000); self.led.on()
-
-
-RTIO_UNDERFLOW_PATTERN = re.compile(
-    r'''(?xs)RTIOUnderflow\(\d+\):\ RTIO\ underflow\ at\ (?=
-        (?=.*\d+\s*mu\b)
-        (?=.*channel\s+0x[0-9A-Fa-f]+:(led\d*|unknown))
-        (?=.*slack\s+-\d+\s*mu)
-    ).+$
-    ''',
-)
-
-
-class ExceptionFormatTest(ExperimentCase):
-    def test_custom_formatted_kernel_exception(self):
-        with self.assertLogs() as captured:
-            with self.assertRaisesRegex(CustomException, r"CustomException\(\d+\): \{foo\}"):
-                self.execute(KernelFmtException)
-        captured_lines = captured.output[0].split('\n')
-        self.assertEqual([captured_lines[0], captured_lines[-1]],
-                         ["ERROR:artiq.coredevice.comm_kernel:Couldn't format exception message", "KeyError: 'foo'"])
-
-    def test_nested_formatted_kernel_exception(self):
-        with self.assertLogs() as captured:
-            with self.assertRaisesRegex(CustomException,
-                                        re.compile(
-                                            r"CustomException\(\d+\): \{foo\}.*?RTIOUnderflow\(\d+\): \{bar\}.*?RTIOOverflow\(\d+\): \{bizz\}.*?RTIOUnderflow\(\d+\): \{buzz\}",
-                                            re.DOTALL)):
-                self.execute(KernelNestedFmtException)
-        captured_lines = captured.output[0].split('\n')
-        self.assertEqual([captured_lines[0], captured_lines[-1]],
-                         ["ERROR:artiq.coredevice.comm_kernel:Couldn't format exception message", "KeyError: 'foo'"])
-
-    def test_rtio_underflow(self):
-        with self.assertRaisesRegex(RTIOUnderflow, RTIO_UNDERFLOW_PATTERN):
-            self.execute(KernelRTIOUnderflow)
 
 
 """
@@ -107,33 +22,35 @@ Considers the following two cases:
 Ensures same exception is raised on both kernel and host in either case
 """
 
-exception_names = EmbeddingMap().str_reverse_map
+exception_names = nac3artiq.RUNTIME_EXCEPTION_NAMES
 
 
+@compile
 class _TestExceptionSync(EnvExperiment):
     def build(self):
         self.setattr_device("core")
     
     @rpc
-    def _raise_exception_host(self, id):
+    def _raise_exception_host(self, id: int32):
         exn = exception_names[id].split('.')[-1].split(':')[-1]
         exn = getattr(exceptions, exn)
         raise exn
 
     @kernel
-    def raise_exception_host(self, id):
+    def raise_exception_host(self, id: int32):
         self._raise_exception_host(id)
 
     @kernel
-    def raise_exception_kernel(self, id):
+    def raise_exception_kernel(self, id: int32):
         test_exception_id_sync(id)
 
-    
-class ExceptionSyncTest(ExperimentCase):
+
+class ExceptionTest(ExperimentCase):
     def test_raise_exceptions_kernel(self):
         exp = self.create(_TestExceptionSync)
         
-        for id, name in list(exception_names.items())[::-1]:
+        # Exceptions are always the first to be assigned IDs
+        for id, name in enumerate(exception_names):
             name = name.split('.')[-1].split(':')[-1]
             with self.assertRaises(getattr(exceptions, name)) as ctx:
                 exp.raise_exception_kernel(id)
@@ -143,7 +60,58 @@ class ExceptionSyncTest(ExperimentCase):
     def test_raise_exceptions_host(self):
         exp = self.create(_TestExceptionSync)
 
-        for id, name in exception_names.items():
+        for id, name in enumerate(exception_names):
             name = name.split('.')[-1].split(':')[-1]
             with self.assertRaises(getattr(exceptions, name)) as ctx:
                 exp.raise_exception_host(id)
+
+
+@compile
+class CoreExceptionTraceback(EnvExperiment):
+    core: KernelInvariant[Core]
+    core_dma: KernelInvariant[CoreDMA]
+    trace_name: KernelInvariant[str]
+
+    def build(self):
+        self.setattr_device("core")
+        self.setattr_device("core_dma")
+        self.trace_name = "dummy_trace"
+    
+    @kernel
+    def run(self):
+        self.core_dma.prepare_record(self.trace_name)
+        with self.core_dma.recorder:
+            pass
+        self.core_dma.erase(self.trace_name)
+        self.core_dma.playback(self.trace_name)
+
+
+class TracebackTest(ExperimentCase):
+    def test_core_exception_traceback(self):
+        with self.assertRaises(exceptions.DMAError) as exn_context:
+            self.execute(CoreExceptionTraceback)
+
+        core_exn = exn_context.exception.artiq_core_exception
+        traceback = core_exn.traceback[core_exn.exception_info[0][1]:]
+        self.assertGreater(len(traceback), 0, "traceback is missing")
+
+        def get_backtrace_records():
+            for filename, line, *_, inlined in traceback:
+                for inlined_filename, inlined_line, *_ in reversed(inlined):
+                    yield inlined_filename, inlined_line
+                yield filename, line
+
+        source_lines = ""
+        expected_line = "self.core_dma.playback(self.trace_name)"
+        for filename, line in get_backtrace_records():
+            source_line = linecache.getline(filename, line)
+            source_lines += source_line
+            if source_line.strip() == expected_line:
+                break
+        else:
+            if source_lines:
+                self.fail("traceback found an incorrect source of exception:\n"
+                    f"expected:\n\t{expected_line}\n"
+                    f"found:\n{source_lines}")
+            else:
+                self.fail("traceback failed to find the source of exception")

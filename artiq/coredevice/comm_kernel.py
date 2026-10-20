@@ -3,6 +3,9 @@ import logging
 import traceback
 import numpy
 import socket
+import re
+import linecache
+import os
 import builtins
 from enum import Enum
 from fractions import Fraction
@@ -10,7 +13,10 @@ from collections import namedtuple
 
 from artiq.coredevice import exceptions
 from artiq import __version__ as software_version
+from artiq import __artiq_dir__ as artiq_dir
+
 from sipyco.keepalive import create_connection
+from sipyco.packed_exceptions import get_exc_message
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +81,12 @@ def _receive_list(kernel, embedding_map):
     elif tag == "I":
         buffer = kernel._read(8 * length)
         return list(numpy.ndarray((length, ), kernel.endian + 'i8', buffer))
+    elif tag == "u":
+        buffer = kernel._read(4 * length)
+        return list(struct.unpack(kernel.endian + "%sL" % length, buffer))
+    elif tag == "U":
+        buffer = kernel._read(8 * length)
+        return list(numpy.ndarray((length, ), kernel.endian + 'u8', buffer))
     elif tag == "f":
         buffer = kernel._read(8 * length)
         return list(struct.unpack(kernel.endian + "%sd" % length, buffer))
@@ -105,6 +117,12 @@ def _receive_array(kernel, embedding_map):
     elif tag == "I":
         buffer = kernel._read(8 * length)
         elems = numpy.ndarray((length, ), kernel.endian + 'i8', buffer)
+    elif tag == "u":
+        buffer = kernel._read(4 * length)
+        elems = numpy.ndarray((length, ), kernel.endian + 'u4', buffer)
+    elif tag == "U":
+        buffer = kernel._read(8 * length)
+        elems = numpy.ndarray((length, ), kernel.endian + 'u8', buffer)
     elif tag == "f":
         buffer = kernel._read(8 * length)
         elems = numpy.ndarray((length, ), kernel.endian + 'd', buffer)
@@ -142,6 +160,8 @@ receivers = {
     "b": lambda kernel, embedding_map: bool(kernel._read_int8()),
     "i": lambda kernel, embedding_map: numpy.int32(kernel._read_int32()),
     "I": lambda kernel, embedding_map: numpy.int64(kernel._read_int64()),
+    "u": lambda kernel, embedding_map: numpy.uint32(kernel._read_uint32()),
+    "U": lambda kernel, embedding_map: numpy.uint64(kernel._read_uint64()),
     "f": lambda kernel, embedding_map: kernel._read_float64(),
     "s": lambda kernel, embedding_map: kernel._read_string(),
     "B": lambda kernel, embedding_map: kernel._read_bytes(),
@@ -166,11 +186,120 @@ class CommKernelDummy:
     def run(self):
         pass
 
-    def serve(self, embedding_map, symbolizer, demangler):
+    def serve(self, embedding_map, symbolizer):
         pass
 
     def check_system_info(self):
         pass
+
+
+class SourceLoader:
+    def __init__(self, runtime_root):
+        self.runtime_root = runtime_root
+
+    def get_source(self, filename):
+        with open(os.path.join(self.runtime_root, filename)) as f:
+            return f.read()
+
+source_loader = SourceLoader(os.path.join(artiq_dir, "soc", "runtime"))
+
+
+class CoreException:
+    """Information about an exception raised or passed through the core device."""
+    def __init__(self, exceptions, exception_info, traceback, stack_pointers):
+        self.exceptions = exceptions
+        self.exception_info = exception_info
+        self.traceback = list(traceback)
+        self.stack_pointers = stack_pointers
+
+        first_exception = exceptions[0]
+        name = first_exception[0]
+        if ':' in name:
+            exn_id, self.name = name.split(':', 2)
+            self.id = int(exn_id)
+        else:
+            self.id, self.name = 0, name
+        self.message = first_exception[1]
+        self.params = first_exception[2]
+
+    def append_backtrace(self, record, inlined=False):
+        filename, line, column, function, address = record
+        stub_globals = {"__name__": filename, "__loader__": source_loader}
+        source_line = linecache.getline(filename, line, stub_globals)
+        indentation = re.search(r"^\s*", source_line).end()
+
+        if address is None:
+            formatted_address = ""
+        elif inlined:
+            formatted_address = " (inlined)"
+        else:
+            formatted_address = " (RA=+0x{:x})".format(address)
+
+        filename = filename.replace(artiq_dir, "<artiq>")
+        lines = []
+        if column == -1:
+            lines.append("    {}".format(source_line.strip() if source_line else "<unknown>"))
+            lines.append("  File \"{file}\", line {line}, in {function}{address}".
+                         format(file=filename, line=line, function=function,
+                                address=formatted_address))
+        else:
+            lines.append("    {}^".format(" " * (column - indentation - 1)))
+            lines.append("    {}".format(source_line.strip() if source_line else "<unknown>"))
+            lines.append("  File \"{file}\", line {line}, column {column},"
+                         " in {function}{address}".
+                         format(file=filename, line=line, column=column,
+                                function=function, address=formatted_address))
+        return lines
+
+    def single_traceback(self, exception_index):
+        # note that we insert in reversed order
+        lines = []
+        start_backtrace_index = self.exception_info[exception_index][1]
+        end_backtrace_index = self.exception_info[exception_index][2]
+        zipped = list(zip(
+            self.traceback[start_backtrace_index:end_backtrace_index],
+            self.stack_pointers[start_backtrace_index:end_backtrace_index]))
+        exception = self.exceptions[exception_index]
+        name = exception[0]
+        message = exception[1]
+        params = exception[2]
+        if ':' in name:
+            exn_id, name = name.split(':', 2)
+            exn_id = int(exn_id)
+        else:
+            exn_id = 0
+        lines.append("{}({}): {}".format(name, exn_id, message.format(*params)))
+        zipped.append(((exception[3], exception[4], exception[5], exception[6],
+                       None, []), None))
+
+        for i, ((filename, line, column, function, address, inlined),
+                sp) in enumerate(zipped):
+            # backtrace of nested exceptions may be discontinuous
+            # but the stack pointer of the same backtrace must be strictly
+            # monotonically increasing
+            #
+            # Note the order of insertion is reversed. The inserted lines
+            # should have strictly decreasing stack pointers
+            if i != 0 and sp is not None and sp >= last_sp:
+                continue
+            last_sp = sp
+
+            for record in reversed(inlined):
+                lines += self.append_backtrace(record, True)
+            lines += self.append_backtrace((filename, line, column, function,
+                                            address))
+
+        lines.append("Traceback (most recent call first):")
+
+        return "\n".join(reversed(lines))
+
+    def __str__(self):
+        tracebacks = [self.single_traceback(i) for i in range(len(self.exceptions))]
+        traceback_str = ('\n\nDuring handling of the above exception, ' +
+                        'another exception occurred:\n\n').join(tracebacks)
+        return 'Core Device Traceback:\n' +\
+                traceback_str +\
+                '\n\nEnd of Core Device Traceback\n'
 
 
 def incompatible_versions(v1, v2):
@@ -208,12 +337,16 @@ class CommKernel:
             raise IOError("Incorrect reply from device: expected e/E.")
         self.unpack_int32 = struct.Struct(self.endian + "l").unpack
         self.unpack_int64 = struct.Struct(self.endian + "q").unpack
+        self.unpack_uint32 = struct.Struct(self.endian + "L").unpack
+        self.unpack_uint64 = struct.Struct(self.endian + "Q").unpack
         self.unpack_float64 = struct.Struct(self.endian + "d").unpack
 
         self.pack_header = struct.Struct(self.endian + "lB").pack
         self.pack_int8 = struct.Struct(self.endian + "B").pack
         self.pack_int32 = struct.Struct(self.endian + "l").pack
         self.pack_int64 = struct.Struct(self.endian + "q").pack
+        self.pack_uint32 = struct.Struct(self.endian + "L").pack
+        self.pack_uint64 = struct.Struct(self.endian + "Q").pack
         self.pack_float64 = struct.Struct(self.endian + "d").pack
 
     def close(self):
@@ -283,6 +416,14 @@ class CommKernel:
         (value, ) = self.unpack_int64(self._read(8))
         return value
 
+    def _read_uint32(self):
+        (value, ) = self.unpack_uint32(self._read(4))
+        return value
+
+    def _read_uint64(self):
+        (value, ) = self.unpack_uint64(self._read(8))
+        return value
+
     def _read_float64(self):
         (value, ) = self.unpack_float64(self._read(8))
         return value
@@ -333,6 +474,12 @@ class CommKernel:
 
     def _write_int64(self, value):
         self._write(self.pack_int64(value))
+
+    def _write_uint32(self, value):
+        self._write(self.pack_uint32(value))
+
+    def _write_uint64(self, value):
+        self._write(self.pack_uint64(value))
 
     def _write_float64(self, value):
         self._write(self.pack_float64(value))
@@ -474,6 +621,16 @@ class CommKernel:
                   (-2**63 <= value <= 2**63-1),
                   lambda: "64-bit int")
             self._write_int64(value)
+        elif tag == "u":
+            check(isinstance(value, (int, numpy.uint32)) and
+                  (0 <= value <= 2**32-1),
+                  lambda: "32-bit unsigned int")
+            self._write_uint32(value)
+        elif tag == "U":
+            check(isinstance(value, (int, numpy.uint32, numpy.uint64)) and
+                  (0 <= value <= 2**64-1),
+                  lambda: "64-bit unsigned int")
+            self._write_uint64(value)
         elif tag == "f":
             check(isinstance(value, float),
                   lambda: "float")
@@ -518,6 +675,20 @@ class CommKernel:
                     raise RPCReturnValueError(
                         "type mismatch: cannot serialize {value} as {type}".format(
                             value=repr(value), type="64-bit integer list"))
+            elif tag_element == "u":
+                try:
+                    self._write(struct.pack(self.endian + "%sL" % len(value), *value))
+                except struct.error:
+                    raise RPCReturnValueError(
+                        "type mismatch: cannot serialize {value} as {type}".format(
+                            value=repr(value), type="32-bit unsigned integer list"))
+            elif tag_element == "U":
+                try:
+                    self._write(struct.pack(self.endian + "%sQ" % len(value), *value))
+                except struct.error:
+                    raise RPCReturnValueError(
+                        "type mismatch: cannot serialize {value} as {type}".format(
+                            value=repr(value), type="64-bit unsigned integer list"))
             elif tag_element == "f":
                 self._write(struct.pack(self.endian + "%sd" %
                                         len(value), *value))
@@ -544,6 +715,14 @@ class CommKernel:
             elif tag_element == "I":
                 array = value.reshape(
                     (-1,), order="C").astype(self.endian + 'i8')
+                self._write(array.tobytes())
+            elif tag_element == "u":
+                array = value.reshape(
+                    (-1,), order="C").astype(self.endian + 'u4')
+                self._write(array.tobytes())
+            elif tag_element == "U":
+                array = value.reshape(
+                    (-1,), order="C").astype(self.endian + 'u8')
                 self._write(array.tobytes())
             elif tag_element == "f":
                 array = value.reshape(
@@ -580,9 +759,24 @@ class CommKernel:
         return_tags = self._read_bytes()
 
         if service_id == 0:
-            def service(obj, attr, value): return setattr(obj, attr, value)
+            def service(*values):
+                if embedding_map.expects_return:
+                    embedding_map.return_value = values[0]
+                    counter = 1
+                else:
+                    counter = 0
+
+                for obj in embedding_map.attributes_writeback:
+                    old_val = obj["obj"]
+                    if "fields" in obj:
+                        for name in obj["fields"]:
+                            setattr(old_val, name, values[counter])
+                            counter += 1
+                    else:
+                        old_val[:] = values[counter]
+                        counter += 1
         else:
-            service = embedding_map.retrieve_object(service_id)
+            service = embedding_map.retrieve_function(service_id)
         logger.debug("rpc service: [%d]%r%s %r %r -> %s", service_id, service,
                      (" (async)" if is_async else ""), args, kwargs, return_tags)
 
@@ -627,7 +821,8 @@ class CommKernel:
                                              exn_type.__module__,
                                              exn_type.__qualname__)
                 self._write_int32(embedding_map.store_str(name))
-                self._write_int32(embedding_map.store_str(self._truncate_message(str(exn))))
+                exn_str = get_exc_message(exn)
+                self._write_int32(embedding_map.store_str(self._truncate_message(exn_str)))
                 for index in range(3):
                     self._write_int64(0)
 
@@ -652,7 +847,7 @@ class CommKernel:
                                  result, result, service)
             self._flush()
 
-    def _serve_exception(self, embedding_map, symbolizer, demangler):
+    def _serve_exception(self, embedding_map, symbolizer):
         exception_count = self._read_int32()
         nested_exceptions = []
 
@@ -676,10 +871,6 @@ class CommKernel:
             nested_exceptions.append([name, message, params,
                                       filename, line, column, function])
 
-        demangled_names = demangler([ex[6] for ex in nested_exceptions])
-        for i in range(exception_count):
-            nested_exceptions[i][6] = demangled_names[i]
-
         exception_info = []
         for _ in range(exception_count):
             sp = self._read_int32()
@@ -701,8 +892,8 @@ class CommKernel:
                 traceback[start_backtrace: end_backtrace])
             stack_pointers[start_backtrace: end_backtrace] = reversed(
                 stack_pointers[start_backtrace: end_backtrace])
-        core_exn = exceptions.CoreException(nested_exceptions, exception_info,
-                                            traceback, stack_pointers)
+        core_exn = CoreException(nested_exceptions, exception_info,
+                                 traceback, stack_pointers)
 
         if core_exn.id == 0:
             python_exn_type = getattr(exceptions, core_exn.name.split('.')[-1])
@@ -735,13 +926,13 @@ class CommKernel:
             logger.warning(f"{(', '.join(errors[:-1]) + ' and ') if len(errors) > 1 else ''}{errors[-1]} "
                            f"reported during kernel execution")
 
-    def serve(self, embedding_map, symbolizer, demangler):
+    def serve(self, embedding_map, symbolizer):
         while True:
             self._read_header()
             if self._read_type == Reply.RPCRequest:
                 self._serve_rpc(embedding_map)
             elif self._read_type == Reply.KernelException:
-                self._serve_exception(embedding_map, symbolizer, demangler)
+                self._serve_exception(embedding_map, symbolizer)
             elif self._read_type == Reply.ClockFailure:
                 raise exceptions.ClockFailure
             else:

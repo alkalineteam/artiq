@@ -48,19 +48,27 @@ pub struct NetAddresses {
     pub ipv6_default_route: Option<Ipv6Address>,
 }
 
-impl fmt::Display for NetAddresses {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MAC={} IPv4={} IPv6-LL={} IPv6=",
-            self.hardware_addr, self.ipv4_addr, self.ipv6_ll_addr)?;
+impl Display for NetAddresses {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "MAC={} IPv4={} ", self.hardware_addr, self.ipv4_addr)?;
+        match self.ipv4_default_route {
+            Some(addr) => write!(f, "IPv4-default-route={} ", addr)?,
+            None => write!(f, "IPv4-default-route=no configured address ")?,
+        };
+        write!(f, "IPv6-LL={} ", self.ipv6_ll_addr)?;
         match self.ipv6_addr {
-            Some(addr) => write!(f, "{}", addr)?,
-            None => write!(f, "no configured address")?
-        }
+            Some(addr) => write!(f, "IPv6={} ", addr)?,
+            None => write!(f, "IPv6=no configured address ")?,
+        };
+        match self.ipv6_default_route {
+            Some(addr) => write!(f, "IPv6-default-route={} ", addr)?,
+            None => write!(f, "IPv6-default-route=no configured address ")?,
+        };
         Ok(())
     }
 }
 
-pub fn get_adresses() -> NetAddresses {
+pub fn get_addresses() -> NetAddresses {
     let hardware_addr;
     match config::read_str("mac", |r| r.map(|s| s.parse())) {
         Ok(Ok(addr)) => hardware_addr = addr,
@@ -83,7 +91,7 @@ pub fn get_adresses() -> NetAddresses {
         _ => Ipv4AddrConfig::UseDhcp,
     };
 
-    let ipv4_default_route = match config::read_str("ipv4_default_route", |r| r.map(|s| s.parse())) {
+    let ipv4_default_route = match config::read_str("ip_default_route", |r| r.map(|s| s.parse())) {
         Ok(Ok(addr)) => Some(addr),
         _ => None,
     };
@@ -100,7 +108,7 @@ pub fn get_adresses() -> NetAddresses {
         _ => None
     };
 
-    let ipv6_default_route = match config::read_str("ipv6_default_route", |r| r.map(|s| s.parse())) {
+    let ipv6_default_route = match config::read_str("ip6_default_route", |r| r.map(|s| s.parse())) {
         Ok(Ok(addr)) => Some(addr),
         _ => None,
     };

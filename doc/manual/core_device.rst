@@ -10,7 +10,7 @@ While it is possible to use the other parts of ARTIQ (controllers, master, GUI, 
 Configuration storage
 ---------------------
 
-The core device reserves some storage space (either flash or directly on SD card, depending on target board) to store configuration data. The configuration data is organized as a list of key-value records, accessible either through :mod:`~artiq.frontend.artiq_mkfs` and :mod:`~artiq.frontend.artiq_flash` or, preferably in most cases, the ``config`` option of the :mod:`~artiq.frontend.artiq_coremgmt` core management tool (see below). Information can be stored to keys of any name, but the specific keys currently used and referenced by ARTIQ are summarized below:
+The core device reserves some storage space (either flash or directly on SD card, depending on target board) to store configuration data. The configuration data is organized as a list of key-value records, normally accessed through the ``config`` option of the :mod:`~artiq.frontend.artiq_coremgmt` core management tool (see below). Information can be stored to keys of any name, but the specific keys currently used and referenced by ARTIQ are summarized below:
 
 ``idle_kernel``
   Stores (compiled ``.tar`` or ``.elf`` binary of) idle kernel. See :ref:`core-device-config`.
@@ -20,11 +20,11 @@ The core device reserves some storage space (either flash or directly on SD card
   Sets IP address of core device. For this and other networking options see also :ref:`core-device-networking`.
 ``mac``
   Sets MAC address of core device. Unnecessary on Kasli or Kasli-SoC, which can obtain it from EEPROM.
-``ipv4_default_route``
+``ip_default_route``
   Sets IPv4 default route.
 ``ip6``
   Sets IPv6 address of core device. Can be set irrespective of and used simultaneously as IPv4 address above.
-``ipv6_default_route``
+``ip6_default_route``
   Sets IPv6 default route.
 ``sed_spread_enable``
   If set to ``1``, will activate :ref:`sed-event-spreading` in this core device. Needs to be set separately for satellite devices in a DRTIO setting.
@@ -77,6 +77,20 @@ The same option is used to write ``boot.bin`` in ARTIQ-Zynq. Note that the ``boo
 
 See also the full reference of :mod:`~artiq.frontend.artiq_coremgmt` in :ref:`Utilities <core-device-management-tool>`.
 
+.. _config-no-network:
+
+Configuration without :mod:`~artiq.frontend.artiq_coremgmt`
+-----------------------------------------------------------
+
+If :mod:`~artiq.frontend.artiq_coremgmt` can't be used (usually because core device is not yet accessible through the network) it is possible to use :mod:`~artiq.frontend.artiq_mkfs` and :mod:`~artiq.frontend.artiq_flash` to set configuration values on Kasli and KC705: ::
+
+  $ artiq_mkfs flash_storage.img -s key1 value1 -s key2 value2 [repeat for more keys]
+  $ artiq_flash write=storage start -t [board] -V [variant] -f flash_storage.img
+
+Writing flash storage from an image will erase preexisting configuration values, so all necessary key-value pairs should be included in a single :mod:`~artiq.frontend.artiq_mkfs` command.
+
+For Zynq-based core devices, the same can be accomplished by creating a file ``config.txt``, with your configuration values written in the format ``key=value``, one per line. Remove the SD card from the device and copy this file onto it directly.
+
 .. _core-device-clocking:
 
 Clocking
@@ -94,7 +108,7 @@ The core device generates the RTIO clock using a PLL locked either to an interna
 
 The selected option can be observed in the core device boot logs and accessed using ``artiq_coremgmt config`` with key ``rtio_clock``.
 
-As of ARTIQ 8, it is now possible for Kasli and Kasli-SoC configurations to enable WRPLL -- a clock recovery method using `DDMTD <http://white-rabbit.web.cern.ch/documents/DDMTD_for_Sub-ns_Synchronization.pdf>`_ and Si549 oscillators -- both to lock the main RTIO clock and (in DRTIO configurations) to lock satellites to master. This is set by the ``enable_wrpll`` option in the :ref:`JSON description file <system-description>`. Because WRPLL requires slightly different gateware and firmware, it is necessary to re-flash devices to enable or disable it in extant systems. If you would like to obtain the firmware for a different WRPLL setting through AFWS, write to the helpdesk@ email.
+As of ARTIQ 8, it is now possible for Kasli and Kasli-SoC configurations to enable WRPLL -- a clock recovery method using `DDMTD <http://white-rabbit.web.cern.ch/documents/DDMTD_for_Sub-ns_Synchronization.pdf>`_ and Si549 oscillators -- both to lock the main RTIO clock and (in DRTIO configurations) to lock satellites to master. This is set by the ``enable_wrpll`` option in the :ref:`JSON description file <system-description>`. Because WRPLL requires slightly different gateware and firmware, it is necessary to re-flash devices to enable or disable it in extant systems. If you would like to obtain the firmware for a different WRPLL setting through AFWS, write an email to helpdesk@m-labs.hk.
 
 If phase noise performance is the priority, it is recommended to use ``ext0_synth0_125to125`` over other ``ext0`` options, as this bypasses the (noisy) MMCM.
 

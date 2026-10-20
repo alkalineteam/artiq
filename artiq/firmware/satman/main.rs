@@ -15,6 +15,7 @@ extern crate crc;
 extern crate cslice;
 extern crate io;
 extern crate eh;
+extern crate refcounting;
 
 use core::convert::TryFrom;
 use board_misoc::{csr, ident, clock, config, i2c, pmp};
@@ -111,9 +112,8 @@ pub fn cricon_read() -> RtioMaster {
 #[cfg(has_drtio_routing)]
 macro_rules! forward {
     ($router:expr, $routing_table:expr, $destination:expr, $rank:expr, $self_destination:expr, $repeaters:expr, $packet:expr) => {{
-        let hop = $routing_table.0[$destination as usize][$rank as usize];
-        if hop != 0 {
-            let repno = (hop - 1) as usize;
+        if let Some(repno) = $routing_table.get_linkno($destination, $rank) {
+            let repno = repno as usize;
             if repno < $repeaters.len() {
                 if $packet.expects_response() {
                     return $repeaters[repno].aux_forward($packet, $router, $routing_table, $rank, $self_destination);
@@ -159,7 +159,7 @@ fn process_aux_packet(dmamgr: &mut DmaManager, analyzer: &mut Analyzer, kernelmg
 
         drtioaux::Packet::DestinationStatusRequest { destination } => {
             #[cfg(has_drtio_routing)]
-            let hop = _routing_table.0[destination as usize][*rank as usize];
+            let hop = _routing_table.get_hop(destination, *rank);
             #[cfg(not(has_drtio_routing))]
             let hop = 0;
 
@@ -225,7 +225,7 @@ fn process_aux_packet(dmamgr: &mut DmaManager, analyzer: &mut Analyzer, kernelmg
 
         #[cfg(has_drtio_routing)]
         drtioaux::Packet::RoutingSetPath { destination, hops } => {
-            _routing_table.0[destination as usize] = hops;
+            _routing_table.set_hops(destination, hops);
             for rep in _repeaters.iter() {
                 if let Err(e) = rep.set_path(destination, &hops) {
                     error!("failed to set path ({})", e);
@@ -923,9 +923,9 @@ fn startup() {
 
     #[cfg(has_i2c)]
     i2c::init().expect("I2C initialization failed");
-    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1rc1", hw_rev = "v2.1")))]
     let (mut io_expander0, mut io_expander1);
-    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1rc1", hw_rev = "v2.1")))]
     {
         io_expander0 = board_misoc::io_expander::IoExpander::new(0).unwrap();
         io_expander1 = board_misoc::io_expander::IoExpander::new(1).unwrap();
@@ -966,6 +966,11 @@ fn startup() {
         #[cfg(hw_rev = "v1.1")]
         {
             p3v3_fmc_en_pin = 1;
+            vadj_fmc_en_pin = 7;
+        }
+        #[cfg(hw_rev = "v1.2")]
+        {
+            p3v3_fmc_en_pin = 0;
             vadj_fmc_en_pin = 7;
         }
 
@@ -1042,7 +1047,7 @@ fn startup() {
             for rep in repeaters.iter_mut() {
                 rep.service(&routing_table, rank, destination, &mut router);
             }
-            #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+            #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1rc1", hw_rev = "v2.1")))]
             {
                 io_expander0.service().expect("I2C I/O expander #0 service failed");
                 io_expander1.service().expect("I2C I/O expander #1 service failed");
@@ -1087,7 +1092,7 @@ fn startup() {
             for rep in repeaters.iter_mut() {
                 rep.service(&routing_table, rank, destination, &mut router);
             }
-            #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+            #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1rc1", hw_rev = "v2.1")))]
             {
                 io_expander0.service().expect("I2C I/O expander #0 service failed");
                 io_expander1.service().expect("I2C I/O expander #1 service failed");
@@ -1156,6 +1161,11 @@ fn enable_error_led() {
     #[cfg(hw_rev = "v1.1")]
     {
         p3v3_fmc_en_pin = 1;
+        vadj_fmc_en_pin = 7;
+    }
+    #[cfg(hw_rev = "v1.2")]
+    {
+        p3v3_fmc_en_pin = 0;
         vadj_fmc_en_pin = 7;
     }
 

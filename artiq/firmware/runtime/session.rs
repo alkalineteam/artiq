@@ -1,7 +1,14 @@
-use core::{mem, str, cell::{Cell, RefCell}, fmt::Write as FmtWrite};
-use alloc::{vec::Vec, string::{String, ToString}};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{
+    cell::{Cell, RefCell},
+    fmt::Write as FmtWrite,
+    str,
+};
+
 use byteorder::{ByteOrder, NativeEndian};
-use cslice::CSlice;
 #[cfg(has_drtio)]
 use tar_no_std::TarArchiveRef;
 
@@ -438,18 +445,16 @@ fn process_host_message(io: &Io, _aux_mutex: &Mutex, _ddma_mutex: &Mutex, _subke
                 }
             })?;
 
-            unsafe {
-                let exn = eh::eh_artiq::Exception {
-                    id:       id,
-                    message:  CSlice::new(message as *const u8, usize::MAX),
-                    param:    param,
-                    file:     CSlice::new(file as *const u8, usize::MAX),
-                    line:     line,
-                    column:   column,
-                    function: CSlice::new(function as *const u8, usize::MAX),
-                };
-                kern_send(io, &kern::RpcRecvReply(Err(exn)))?;
-            }
+            let exn = eh::eh_artiq::Exception {
+                id: id,
+                message: message.into(),
+                param: param,
+                file: file.into(),
+                line: line,
+                column: column,
+                function: function.into(),
+            };
+            kern_send(io, &kern::RpcRecvReply(Err(exn)))?;
 
             session.kernel_state = KernelState::Running
         }
@@ -530,7 +535,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 kern_acknowledge()
             }
             &kern::DmaRecordStop { duration, enable_ddma } => {
-                let _id = session.congress.dma_manager.record_stop(duration, enable_ddma, io, ddma_mutex)?;
+                let _id = session.congress.dma_manager.record_stop(duration, enable_ddma, io, ddma_mutex, routing_table)?;
                 #[cfg(has_drtio)]
                 if enable_ddma {
                     remote_dma::upload_traces(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, _id)?;
@@ -605,16 +610,14 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
             },
 
             &kern::CacheGetRequest { key } => {
-                let value = session.congress.cache.get(key);
+                let (value, len) = session.congress.cache.get(key);
                 kern_send(io, &kern::CacheGetReply {
-                    // Zing! This transmute is only safe because we dynamically track
-                    // whether the kernel has borrowed any values from the cache.
-                    value: unsafe { mem::transmute(value) }
+                    value, len
                 })
             }
 
-            &kern::CachePutRequest { key, value } => {
-                let succeeded = session.congress.cache.put(key, value).is_ok();
+            &kern::CachePutRequest { key, value, len } => {
+                let succeeded = session.congress.cache.put(key, value, len).is_ok();
                 kern_send(io, &kern::CachePutReply { succeeded: succeeded })
             }
 
@@ -785,7 +788,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 address,
                 length,
             } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 loop {
                     let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                         &Packet::CXPReadRequest {
@@ -820,7 +823,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 address,
                 value,
             } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 loop {
                     let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                         &Packet::CXPWrite32Request {
@@ -856,7 +859,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 x1,
                 y1,
             } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                     &Packet::CXPROIViewerSetupRequest {
                         destination: *destination,
@@ -882,7 +885,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
             }
             #[cfg(has_drtio)]
             kern::CXPROIViewerDataRequest { destination } => {
-                let linkno = routing_table.0[*destination as usize][0] - 1;
+                let linkno = routing_table.get_linkno(*destination, 0).unwrap();
                 let reply = loop {
                     let drtioaux_packet = drtio::aux_transact(io, aux_mutex, ddma_mutex, subkernel_mutex, routing_table, linkno,
                         &Packet::CXPROIViewerDataRequest { destination: *destination },
@@ -922,7 +925,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 let mut reply = kern::GrabberUartReadReply { succeeded: false, data: 0};
 
                 #[cfg(has_drtio)]
-                let hop = routing_table.0[_destination as usize][0];
+                let hop = routing_table.get_hop(_destination, 0);
 
                 #[cfg(not(has_drtio))]
                 let hop = 0;
@@ -959,7 +962,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
                 let mut reply = kern::GrabberUartWriteReply { succeeded: false };
 
                 #[cfg(has_drtio)]
-                let hop = routing_table.0[_destination as usize][0];
+                let hop = routing_table.get_hop(_destination, 0);
 
                 #[cfg(not(has_drtio))]
                 let hop = 0;

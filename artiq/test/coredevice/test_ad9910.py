@@ -1,17 +1,22 @@
-from numpy import int64
+from numpy import int32, int64, uint32
+from typing import Generic
 
 from artiq.coredevice.ad9910 import (
     _AD9910_REG_FTW,
     _AD9910_REG_PROFILE0,
-    DEFAULT_PROFILE,
+    AD9910,
     RAM_DEST_FTW,
     RAM_MODE_RAMPUP,
+    SyncDataT,
 )
+from artiq.coredevice.core import Core
 from artiq.coredevice.urukul import (
+    CPLD as UrukulCPLD,
     STA_PROTO_REV_8,
     STA_PROTO_REV_9,
     ProtoRev8,
     ProtoRev9,
+    DEFAULT_PROFILE,
     urukul_sta_smp_err,
 )
 from artiq.experiment import *
@@ -23,7 +28,13 @@ CPLD = "urukul_cpld"
 DDS = "urukul_ch0"
 
 
-class AD9910Exp(EnvExperiment):
+@compile
+class AD9910Exp(EnvExperiment, Generic[SyncDataT]):
+    core: KernelInvariant[Core]
+    cpld: KernelInvariant[UrukulCPLD[Auto]]
+    dev: KernelInvariant[AD9910[SyncDataT]]
+    io_update_device: Kernel[bool]
+
     def build(self, runner, io_update_device=True):
         self.setattr_device("core")
         self.cpld = self.get_device(CPLD)
@@ -33,6 +44,34 @@ class AD9910Exp(EnvExperiment):
 
     def run(self):
         getattr(self, self.runner)()
+
+    @rpc
+    def report_int32(self, name: str, data: int32):
+        self.set_dataset(name, data)
+
+    @rpc
+    def report_uint32(self, name: str, data: uint32):
+        self.set_dataset(name, data)
+
+    @rpc
+    def report_list_int32(self, name: str, data: list[int32]):
+        self.set_dataset(name, data)
+
+    @rpc
+    def report_list_uint32(self, name: str, data: list[uint32]):
+        self.set_dataset(name, data)
+
+    @rpc
+    def report_int64(self, name: str, data: int64):
+        self.set_dataset(name, data)
+
+    @rpc
+    def report_float(self, name: str, data: float):
+        self.set_dataset(name, data)
+
+    @rpc
+    def report_list_float(self, name: str, data: list[float]):
+        self.set_dataset(name, data)
 
     @kernel
     def instantiate(self):
@@ -56,11 +95,11 @@ class AD9910Exp(EnvExperiment):
         self.cpld.init()
         cfg = self.cpld.cfg_reg
         if self.cpld.proto_rev == STA_PROTO_REV_8:
-            cfg &= ~(1 << ProtoRev8.CFG_CLK_SEL1)
-            cfg |= 1 << ProtoRev8.CFG_CLK_SEL0
+            cfg &= ~int64(1 << ProtoRev8.CFG_CLK_SEL1)
+            cfg |= int64(1 << ProtoRev8.CFG_CLK_SEL0)
         else:
-            cfg &= ~(1 << ProtoRev9.CFG_CLK_SEL1)
-            cfg |= 1 << ProtoRev9.CFG_CLK_SEL0
+            cfg &= ~int64(1 << ProtoRev9.CFG_CLK_SEL1)
+            cfg |= int64(1 << ProtoRev9.CFG_CLK_SEL0)
 
         self.cpld.cfg_write(cfg)
         # clk_sel=1, external SMA, should fail PLL lock
@@ -80,10 +119,10 @@ class AD9910Exp(EnvExperiment):
             # Set MASK_NU to trigger CFG.IO_UPDATE
             self.dev.cfg_mask_nu(True)
         self.dev.init()
-        f = 81.2345*MHz
-        p = .33
-        a = .89
-        att = 20*dB
+        f = 81.2345 * MHz
+        p = 0.33
+        a = 0.89
+        att = 20.0 * dB
         self.dev.set_att(att)
         self.dev.set(frequency=f, phase=p, amplitude=a)
 
@@ -92,14 +131,14 @@ class AD9910Exp(EnvExperiment):
         self.core.break_realtime()
         att_mu = self.dev.get_att_mu()
 
-        self.set_dataset("ftw_set", self.dev.frequency_to_ftw(f))
-        self.set_dataset("ftw_get", ftw)
-        self.set_dataset("pow_set", self.dev.turns_to_pow(p))
-        self.set_dataset("pow_get", pow_)
-        self.set_dataset("asf_set", self.dev.amplitude_to_asf(a))
-        self.set_dataset("asf_get", asf)
-        self.set_dataset("att_set", self.cpld.att_to_mu(att))
-        self.set_dataset("att_get", att_mu)
+        self.report_uint32("ftw_set", self.dev.frequency_to_ftw(f))
+        self.report_uint32("ftw_get", ftw)
+        self.report_uint32("pow_set", self.dev.turns_to_pow(p))
+        self.report_uint32("pow_get", pow_)
+        self.report_uint32("asf_set", self.dev.amplitude_to_asf(a))
+        self.report_uint32("asf_get", asf)
+        self.report_int32("att_set", self.cpld.att_to_mu(att))
+        self.report_int32("att_get", att_mu)
 
         if not self.io_update_device:
             self.core.break_realtime()
@@ -114,13 +153,13 @@ class AD9910Exp(EnvExperiment):
             # Set MASK_NU to trigger CFG.IO_UPDATE
             self.dev.cfg_mask_nu(True)
         self.dev.init()
-        f = 81.2345*MHz
-        p = .33
-        a = .89
+        f = 81.2345 * MHz
+        p = 0.33
+        a = 0.89
         self.dev.set_frequency(f)
         self.dev.set_phase(p)
         self.dev.set_amplitude(a)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
 
         self.core.break_realtime()
         ftw = self.dev.get_ftw()
@@ -129,12 +168,12 @@ class AD9910Exp(EnvExperiment):
         self.core.break_realtime()
         asf = self.dev.get_asf()
 
-        self.set_dataset("ftw_set", self.dev.frequency_to_ftw(f))
-        self.set_dataset("ftw_get", ftw)
-        self.set_dataset("pow_set", self.dev.turns_to_pow(p))
-        self.set_dataset("pow_get", pow_)
-        self.set_dataset("asf_set", self.dev.amplitude_to_asf(a))
-        self.set_dataset("asf_get", asf)
+        self.report_uint32("ftw_set", self.dev.frequency_to_ftw(f))
+        self.report_uint32("ftw_get", ftw)
+        self.report_uint32("pow_set", self.dev.turns_to_pow(p))
+        self.report_uint32("pow_get", pow_)
+        self.report_uint32("asf_set", self.dev.amplitude_to_asf(a))
+        self.report_uint32("asf_get", asf)
 
         if not self.io_update_device:
             self.core.break_realtime()
@@ -152,10 +191,10 @@ class AD9910Exp(EnvExperiment):
         lo = 0x12345678
         hi = 0x09abcdef
         self.dev.write64(_AD9910_REG_PROFILE0 + DEFAULT_PROFILE, hi, lo)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
         read = self.dev.read64(_AD9910_REG_PROFILE0 + DEFAULT_PROFILE)
-        self.set_dataset("write", (int64(hi) << 32) | lo)
-        self.set_dataset("read", read)
+        self.report_int64("write", (int64(hi) << 32) | int64(lo))
+        self.report_int64("read", read)
         if not self.io_update_device:
             self.core.break_realtime()
             # Unset MASK_NU to un-trigger CFG.IO_UPDATE
@@ -166,13 +205,15 @@ class AD9910Exp(EnvExperiment):
         self.core.break_realtime()
         self.cpld.init()
         self.dev.init()
-        f = 81.2345*MHz
+        f = 81.2345 * MHz
         n = 10
         t0 = self.core.get_rtio_counter_mu()
         for i in range(n):
-            self.dev.set(frequency=f, phase=.33, amplitude=.89)
-        self.set_dataset("dt", self.core.mu_to_seconds(
-            self.core.get_rtio_counter_mu() - t0)/n)
+            self.dev.set(frequency=f, phase=0.33, amplitude=0.89)
+        self.report_float(
+            "dt",
+            self.core.mu_to_seconds(self.core.get_rtio_counter_mu() - t0) / float(n),
+        )
 
     @kernel
     def set_speed_mu(self):
@@ -182,9 +223,11 @@ class AD9910Exp(EnvExperiment):
         n = 10
         t0 = self.core.get_rtio_counter_mu()
         for i in range(n):
-            self.dev.set_mu(0x12345678, 0x1234, 0x4321)
-        self.set_dataset("dt", self.core.mu_to_seconds(
-            self.core.get_rtio_counter_mu() - t0)/n)
+            self.dev.set_mu(uint32(0x12345678), uint32(0x1234), uint32(0x4321))
+        self.report_float(
+            "dt",
+            self.core.mu_to_seconds(self.core.get_rtio_counter_mu() - t0) / float(n),
+        )
 
     @kernel
     def sync_window(self):
@@ -197,63 +240,63 @@ class AD9910Exp(EnvExperiment):
         err = [0] * 32
         for i in range(6):
             self.sync_scan(err, win=i)
-            print(err)
             self.core.break_realtime()
         dly, win = self.dev.tune_sync_delay()
         self.sync_scan(err, win=win)
         # FIXME: win + 1  # tighten window by 2*75ps
         # after https://github.com/sinara-hw/Urukul/issues/16
-        self.set_dataset("dly", dly)
-        self.set_dataset("win", win)
-        self.set_dataset("err", err)
+        self.report_int32("dly", dly)
+        self.report_int32("win", win)
+        self.report_list_int32("err", err)
         if not self.io_update_device:
             # Unset MASK_NU to un-trigger CFG.IO_UPDATE
             self.dev.cfg_mask_nu(False)
 
     @kernel
-    def sync_scan(self, err, win):
+    def sync_scan(self, err: list[int32], win: int32):
         for in_delay in range(len(err)):
             self.dev.set_sync(in_delay=in_delay, window=win)
             self.dev.clear_smp_err()
             # delay(10*us)  # integrate SMP_ERR statistics
             e = urukul_sta_smp_err(self.cpld.sta_read())
             err[in_delay] = (e >> (self.dev.chip_select - 4)) & 1
-            delay(50*us)  # slack
+            self.core.delay(50.0 * us)  # slack
 
     @kernel
     def io_update_delay(self):
         self.core.break_realtime()
         self.cpld.init()
         self.dev.init()
-        bins1 = [0]*4
-        bins2 = [0]*4
+        bins1 = [0] * 4
+        bins2 = [0] * 4
         self.scan_io_delay(bins1, bins2)
-        self.set_dataset("bins1", bins1)
-        self.set_dataset("bins2", bins2)
-        self.set_dataset("dly", self.dev.tune_io_update_delay())
+        self.report_list_int32("bins1", bins1)
+        self.report_list_int32("bins2", bins2)
+        self.report_int32("dly", self.dev.tune_io_update_delay())
 
     @kernel
-    def scan_io_delay(self, bins1, bins2):
-        delay(100*us)
+    def scan_io_delay(self, bins1: list[int32], bins2: list[int32]):
+        self.core.delay(100.0 * us)
         n = 100
         for i in range(n):
             for j in range(len(bins1)):
-                bins1[j] += self.dev.measure_io_update_alignment(int64(j), j + 1)
-                bins2[j] += self.dev.measure_io_update_alignment(int64(j), j + 2)
-        delay(10*ms)
+                bins1[j] += self.dev.measure_io_update_alignment(int64(j), int64(j + 1))
+                bins2[j] += self.dev.measure_io_update_alignment(int64(j), int64(j + 2))
+        self.core.delay(10.0 * ms)
 
     @kernel
     def sw_readback(self):
-        self.core.break_realtime()
-        self.cpld.init()
-        self.dev.init()
-        self.dev.cfg_sw(False)
-        self.dev.sw.on()
-        sw_on = (self.cpld.sta_read() >> (self.dev.chip_select - 4)) & 1
-        delay(10*us)
-        self.dev.sw.off()
-        sw_off = (self.cpld.sta_read() >> (self.dev.chip_select - 4)) & 1
-        self.set_dataset("sw", (sw_on, sw_off))
+        if self.dev.sw.is_some():
+            self.core.break_realtime()
+            self.cpld.init()
+            self.dev.init()
+            self.dev.cfg_sw(False)
+            self.dev.sw.unwrap().on()
+            sw_on = (self.cpld.sta_read() >> (self.dev.chip_select - 4)) & 1
+            self.core.delay(10.0 * us)
+            self.dev.sw.unwrap().off()
+            sw_off = (self.cpld.sta_read() >> (self.dev.chip_select - 4)) & 1
+            self.report_list_int32("sw", [sw_on, sw_off])
 
     @kernel
     def cfg_sw_readback(self):
@@ -265,10 +308,10 @@ class AD9910Exp(EnvExperiment):
         self.dev.init()
         self.dev.cfg_sw(True)
         cfg_sw_on = (self.cpld.sta_read() >> (self.dev.chip_select - 4)) & 1
-        delay(10*us)
+        self.core.delay(10.0 * us)
         self.dev.cfg_sw(False)
         cfg_sw_off = (self.cpld.sta_read() >> (self.dev.chip_select - 4)) & 1
-        self.set_dataset("cfg_sw", (cfg_sw_on, cfg_sw_off))
+        self.report_list_int32("cfg_sw", [cfg_sw_on, cfg_sw_off])
         if not self.io_update_device:
             # Unset MASK_NU to un-trigger CFG.IO_UPDATE
             self.core.break_realtime()
@@ -283,28 +326,28 @@ class AD9910Exp(EnvExperiment):
             self.dev.cfg_mask_nu(True)
         self.dev.init()
         for i in range(8):
-            self.dev.set_mu(ftw=i, profile=i)
+            self.dev.set_mu(ftw=uint32(i), profile=i)
         ftw = [0] * 8
         for i in range(8):
             self.cpld.set_profile(self.dev.chip_select - 4, i)
             # If PROFILE is not alligned to SYNC_CLK a multi-bit change
             # doesn't transfer cleanly. Use IO_UPDATE to load the profile
             # again.
-            self.dev.io_update.pulse_mu(8)
+            self.dev.io_update.pulse_mu(int64(8))
             ftw[i] = self.dev.read32(_AD9910_REG_FTW)
-            delay(100*us)
-        self.set_dataset("ftw", ftw)
+            self.core.delay(100.0 * us)
         if not self.io_update_device:
             # Unset MASK_NU to un-trigger CFG.IO_UPDATE
             self.dev.cfg_mask_nu(False)
+        self.report_list_int32("ftw", ftw)
 
     @kernel
     def ram_write(self):
         n = 1 << 10
-        write = [0]*n
+        write = [uint32(0)] * n
         for i in range(n):
-            write[i] = i | (i << 16)
-        read = [0]*n
+            write[i] = uint32(i | (i << 16))
+        read = [uint32(0)] * n
 
         self.core.break_realtime()
         self.cpld.init()
@@ -313,18 +356,18 @@ class AD9910Exp(EnvExperiment):
             self.dev.cfg_mask_nu(True)
         self.dev.init()
         self.dev.set_cfr1(ram_enable=0)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
         self.dev.set_profile_ram(
             start=0, end=0 + n - 1, step=1,
             profile=0, mode=RAM_MODE_RAMPUP)
         self.cpld.set_profile(self.dev.chip_select - 4, 0)
-        self.dev.io_update.pulse_mu(8)
-        delay(1*ms)
+        self.dev.io_update.pulse_mu(int64(8))
+        self.core.delay(1.0 * ms)
         self.dev.write_ram(write)
-        delay(1*ms)
+        self.core.delay(1.0 * ms)
         self.dev.read_ram(read)
-        self.set_dataset("w", write)
-        self.set_dataset("r", read)
+        self.report_list_uint32("w", write)
+        self.report_list_uint32("r", read)
         if not self.io_update_device:
             self.core.break_realtime()
             # Unset MASK_NU to un-trigger CFG.IO_UPDATE
@@ -332,10 +375,10 @@ class AD9910Exp(EnvExperiment):
 
     @kernel
     def ram_read_overlapping(self):
-        write = [0]*989
+        write = [uint32(0)] * 989
         for i in range(len(write)):
-            write[i] = i
-        read = [0]*100
+            write[i] = uint32(i)
+        read = [uint32(0)] * 100
         offset = 367
 
         self.core.break_realtime()
@@ -345,30 +388,34 @@ class AD9910Exp(EnvExperiment):
             self.dev.cfg_mask_nu(True)
         self.dev.init()
         self.dev.set_cfr1(ram_enable=0)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
 
         self.dev.set_profile_ram(
-            start=0, end=0 + len(write) - 1, step=1,
-            profile=0, mode=RAM_MODE_RAMPUP)
+            start=0, end=0 + len(write) - 1, step=1, profile=0, mode=RAM_MODE_RAMPUP
+        )
         self.dev.set_profile_ram(
-            start=offset, end=offset + len(read) - 1, step=1,
-            profile=1, mode=RAM_MODE_RAMPUP)
+            start=offset,
+            end=offset + len(read) - 1,
+            step=1,
+            profile=1,
+            mode=RAM_MODE_RAMPUP,
+        )
 
         self.cpld.set_profile(self.dev.chip_select - 4, 0)
-        self.dev.io_update.pulse_mu(8)
-        delay(1*ms)
+        self.dev.io_update.pulse_mu(int64(8))
+        self.core.delay(1.0 * ms)
         self.dev.write_ram(write)
-        delay(1*ms)
+        self.core.delay(1.0 * ms)
         self.cpld.set_profile(self.dev.chip_select - 4, 1)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
         self.dev.read_ram(read)
 
         # RAM profile addresses are apparently aligned
         # to the last address of the RAM
         start = len(write) - offset - len(read)
         end = len(write) - offset
-        self.set_dataset("w", write[start:end])
-        self.set_dataset("r", read)
+        self.report_list_uint32("w", write[start:end])
+        self.report_list_uint32("r", read)
 
         if not self.io_update_device:
             self.core.break_realtime()
@@ -377,8 +424,8 @@ class AD9910Exp(EnvExperiment):
 
     @kernel
     def ram_exec(self):
-        ftw0 = [0x12345678]*2
-        ftw1 = [0x55aaaa55]*2
+        ftw0 = [uint32(0x12345678)] * 2
+        ftw1 = [uint32(0x55AAAA55)] * 2
         self.core.break_realtime()
         self.cpld.init()
         if not self.io_update_device:
@@ -386,36 +433,36 @@ class AD9910Exp(EnvExperiment):
             self.dev.cfg_mask_nu(True)
         self.dev.init()
         self.dev.set_cfr1(ram_enable=0)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
 
         self.dev.set_profile_ram(
-            start=100, end=100 + len(ftw0) - 1, step=1,
-            profile=3, mode=RAM_MODE_RAMPUP)
+            start=100, end=100 + len(ftw0) - 1, step=1, profile=3, mode=RAM_MODE_RAMPUP
+        )
         self.dev.set_profile_ram(
-            start=200, end=200 + len(ftw1) - 1, step=1,
-            profile=4, mode=RAM_MODE_RAMPUP)
+            start=200, end=200 + len(ftw1) - 1, step=1, profile=4, mode=RAM_MODE_RAMPUP
+        )
 
         self.cpld.set_profile(self.dev.chip_select - 4, 3)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
         self.dev.write_ram(ftw0)
 
         self.cpld.set_profile(self.dev.chip_select - 4, 4)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
         self.dev.write_ram(ftw1)
 
         self.dev.set_cfr1(ram_enable=1, ram_destination=RAM_DEST_FTW)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
 
         self.cpld.set_profile(self.dev.chip_select - 4, 3)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
         ftw0r = self.dev.read32(_AD9910_REG_FTW)
-        delay(100*us)
+        self.core.delay(100.0 * us)
 
         self.cpld.set_profile(self.dev.chip_select - 4, 4)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
         ftw1r = self.dev.read32(_AD9910_REG_FTW)
 
-        self.set_dataset("ftw", [ftw0[0], ftw0r, ftw1[0], ftw1r])
+        self.report_list_uint32("ftw", [ftw0[0], uint32(ftw0r), ftw1[0], uint32(ftw1r)])
 
         if not self.io_update_device:
             self.core.break_realtime()
@@ -424,8 +471,8 @@ class AD9910Exp(EnvExperiment):
 
     @kernel
     def ram_convert_frequency(self):
-        freq = [33*MHz]*2
-        ram = [0]*len(freq)
+        freq = [33.0 * MHz] * 2
+        ram = [uint32(0)] * len(freq)
         self.dev.frequency_to_ram(freq, ram)
 
         self.core.break_realtime()
@@ -435,19 +482,19 @@ class AD9910Exp(EnvExperiment):
             self.dev.cfg_mask_nu(True)
         self.dev.init()
         self.dev.set_cfr1(ram_enable=0)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
         self.dev.set_profile_ram(
             start=100, end=100 + len(ram) - 1, step=1,
             profile=6, mode=RAM_MODE_RAMPUP)
         self.cpld.set_profile(self.dev.chip_select - 4, 6)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
         self.dev.write_ram(ram)
         self.dev.set_cfr1(ram_enable=1, ram_destination=RAM_DEST_FTW)
-        self.dev.io_update.pulse_mu(8)
+        self.dev.io_update.pulse_mu(int64(8))
         ftw_read = self.dev.read32(_AD9910_REG_FTW)
-        self.set_dataset("ram", ram)
-        self.set_dataset("ftw_read", ftw_read)
-        self.set_dataset("freq", freq)
+        self.report_list_uint32("ram", ram)
+        self.report_int32("ftw_read", ftw_read)
+        self.report_list_float("freq", freq)
         if not self.io_update_device:
             self.core.break_realtime()
             # Unset MASK_NU to un-trigger CFG.IO_UPDATE
@@ -455,13 +502,13 @@ class AD9910Exp(EnvExperiment):
 
     @kernel
     def ram_convert_powasf(self):
-        amplitude = [.1, .9]
-        turns = [.3, .5]
-        ram = [0]*2
+        amplitude = [0.1, 0.9]
+        turns = [0.3, 0.5]
+        ram = [uint32(0)] * 2
         self.dev.turns_amplitude_to_ram(turns, amplitude, ram)
-        self.set_dataset("amplitude", amplitude)
-        self.set_dataset("turns", turns)
-        self.set_dataset("ram", ram)
+        self.report_list_float("amplitude", amplitude)
+        self.report_list_float("turns", turns)
+        self.report_list_uint32("ram", ram)
 
 
 class AD9910Test(ExperimentCase):
@@ -473,7 +520,7 @@ class AD9910Test(ExperimentCase):
         self.execute(AD9910Exp, "init", io_update_device=io_update_device)
 
     @io_update_device(CPLD, True, False, proto_rev=STA_PROTO_REV_8)
-    def test_init_fail_proto_rev8(self, io_update_device):
+    def test_init_fail(self, io_update_device):
         with self.assertRaises(ValueError):
             self.execute(
                 AD9910Exp, "init_fail_proto_rev", io_update_device=io_update_device
@@ -550,14 +597,14 @@ class AD9910Test(ExperimentCase):
     def test_sw_readback(self, io_update_device):
         if "sw_device" in self.device_mgr.get_desc(DDS).get("arguments", []):
             self.execute(AD9910Exp, "sw_readback", io_update_device=io_update_device)
-            self.assertEqual(self.dataset_mgr.get("sw"), (1, 0))
+            self.assertEqual(self.dataset_mgr.get("sw"), [1, 0])
 
     @io_update_device(CPLD, True, False, proto_rev=STA_PROTO_REV_9)
     def test_cfg_sw_readback(self, io_update_device):
         self.execute(AD9910Exp, "cfg_sw_readback", io_update_device=io_update_device)
-        self.assertEqual(self.dataset_mgr.get("cfg_sw"), (1, 0))
+        self.assertEqual(self.dataset_mgr.get("cfg_sw"), [1, 0])
 
-    @io_update_device(True, False)
+    @io_update_device(CPLD, True, False)
     def test_profile_readback(self, io_update_device):
         self.execute(AD9910Exp, "profile_readback", io_update_device=io_update_device)
         self.assertEqual(self.dataset_mgr.get("ftw"), list(range(8)))

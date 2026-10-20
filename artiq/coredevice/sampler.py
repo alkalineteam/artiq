@@ -1,7 +1,11 @@
-from artiq.language.core import kernel, delay, portable
+from numpy import int32
+
+from artiq.language.core import compile, kernel, portable, Kernel, KernelInvariant
 from artiq.language.units import ns
 
+from artiq.coredevice.core import Core
 from artiq.coredevice import spi2 as spi
+from artiq.coredevice.ttl import TTLOut
 
 
 SPI_CONFIG = (0*spi.SPI_OFFLINE | 0*spi.SPI_END |
@@ -15,7 +19,7 @@ SPI_CS_PGIA = 1  # separate SPI bus, CS used as RCLK
 
 
 @portable
-def adc_mu_to_volt(data, gain=0, corrected_fs=True):
+def adc_mu_to_volt(data: int32, gain: int32 = 0, corrected_fs: bool = True) -> float:
     """Convert ADC data in machine units to volts.
 
     :param data: 16-bit signed ADC word
@@ -24,19 +28,21 @@ def adc_mu_to_volt(data, gain=0, corrected_fs=True):
         Should be ``True`` for Sampler revisions after v2.1. ``False`` for v2.1 and earlier.
     :return: Voltage in volts
     """
+    volt_per_lsb = 0.
     if gain == 0:
-        volt_per_lsb = 20.48 / (1 << 16) if corrected_fs else 20. / (1 << 16)
+        volt_per_lsb = 20.48 / float(1 << 16) if corrected_fs else 20. / float(1 << 16)
     elif gain == 1:
-        volt_per_lsb = 2.048 / (1 << 16) if corrected_fs else 2. / (1 << 16)
+        volt_per_lsb = 2.048 / float(1 << 16) if corrected_fs else 2. / float(1 << 16)
     elif gain == 2:
-        volt_per_lsb = .2048 / (1 << 16) if corrected_fs else .2 / (1 << 16)
+        volt_per_lsb = .2048 / float(1 << 16) if corrected_fs else .2 / float(1 << 16)
     elif gain == 3:
-        volt_per_lsb = 0.02048 / (1 << 16) if corrected_fs else .02 / (1 << 16)
+        volt_per_lsb = 0.02048 / float(1 << 16) if corrected_fs else .02 / float(1 << 16)
     else:
         raise ValueError("invalid gain")
-    return data * volt_per_lsb
+    return float(data)* volt_per_lsb
 
 
+@compile
 class Sampler:
     """Sampler ADC.
 
@@ -53,7 +59,13 @@ class Sampler:
     :param hw_rev: Sampler's hardware revision string (default 'v2.2')
     :param core_device: Core device name
     """
-    kernel_invariants = {"bus_adc", "bus_pgia", "core", "cnv", "div", "corrected_fs"}
+    core: KernelInvariant[Core]
+    bus_adc: KernelInvariant[spi.SPIMaster]
+    bus_pgia: KernelInvariant[spi.SPIMaster]
+    cnv: KernelInvariant[TTLOut]
+    div: KernelInvariant[int32]
+    gains: Kernel[int32]
+    corrected_fs: KernelInvariant[bool]
 
     def __init__(self, dmgr, spi_adc_device, spi_pgia_device, cnv_device,
                  div=8, gains=0x0000, hw_rev="v2.2", core_device="core"):
@@ -83,7 +95,7 @@ class Sampler:
                                     16, self.div, SPI_CS_PGIA)
 
     @kernel
-    def set_gain_mu(self, channel, gain):
+    def set_gain_mu(self, channel: int32, gain: int32):
         """Set instrumentation amplifier gain of a channel.
 
         The four gain settings (0, 1, 2, 3) corresponds to gains of
@@ -99,7 +111,7 @@ class Sampler:
         self.gains = gains
 
     @kernel
-    def get_gains_mu(self):
+    def get_gains_mu(self) -> int32:
         """Read the PGIA gain settings of all channels.
 
         :return: The PGIA gain settings in machine units.
@@ -113,7 +125,7 @@ class Sampler:
         return self.gains
 
     @kernel
-    def sample_mu(self, data):
+    def sample_mu(self, data: list[int32]):
         """Acquire a set of samples.
 
         Perform a conversion and transfer the samples.
@@ -127,8 +139,8 @@ class Sampler:
             The ``data`` list will always be filled with the last item
             holding to the sample from channel 7.
         """
-        self.cnv.pulse(30*ns)  # t_CNVH
-        delay(450*ns)  # t_CONV
+        self.cnv.pulse(30.*ns)  # t_CNVH
+        self.core.delay(450.*ns)  # t_CONV
         mask = 1 << 15
         for i in range(len(data)//2):
             self.bus_adc.write(0)
@@ -139,7 +151,7 @@ class Sampler:
             data[i - 1] = -(val & mask) + (val & ~mask)
 
     @kernel
-    def sample(self, data):
+    def sample(self, data: list[float]):
         """Acquire a set of samples.
 
         See also :meth:`Sampler.sample_mu`.
@@ -147,7 +159,7 @@ class Sampler:
         :param data: List of floating point data samples to fill.
         """
         n = len(data)
-        adc_data = [0]*n
+        adc_data = [0 for _ in range(n)]
         self.sample_mu(adc_data)
         for i in range(n):
             channel = i + 8 - len(data)

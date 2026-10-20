@@ -1,5 +1,6 @@
 use core::mem;
 use alloc::{vec::Vec, string::String, collections::btree_map::BTreeMap};
+use board_artiq::drtio_routing::RoutingTable;
 use sched::{Io, Mutex, Error as SchedError};
 
 const ALIGNMENT: usize = 64;
@@ -7,7 +8,6 @@ const ALIGNMENT: usize = 64;
 #[cfg(has_drtio)]
 pub mod remote_dma {
     use super::*;
-    use board_artiq::drtio_routing::RoutingTable;
     use rtio_mgt::drtio;
     use board_misoc::clock;
 
@@ -251,7 +251,7 @@ impl Manager {
     }
 
     pub fn record_stop(&mut self, duration: u64, _enable_ddma: bool,
-            _io: &Io, _ddma_mutex: &Mutex) -> Result<u32, SchedError> {
+            _io: &Io, _ddma_mutex: &Mutex, routing_table: &RoutingTable) -> Result<u32, SchedError> {
         let mut local_trace = Vec::new();
         let mut _remote_traces: BTreeMap<u8, Vec<u8>> = BTreeMap::new();
 
@@ -267,7 +267,8 @@ impl Manager {
                 // ptr + 3 = tgt >> 24 (destination)
                 let len = trace[ptr] as usize;
                 let destination = trace[ptr+3];
-                if destination == 0 {
+                let hop = routing_table.get_hop(destination, 0);
+                if hop == 0 {
                     local_trace.extend(&trace[ptr..ptr+len]);
                 }
                 else {

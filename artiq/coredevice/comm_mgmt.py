@@ -45,8 +45,6 @@ class CommMgmt:
         self.drtio_dest = drtio_dest
 
     def open(self):
-        if hasattr(self, "socket"):
-            return
         self.socket = create_connection(self.host, self.port)
         self.socket.sendall(b"ARTIQ management\n")
         self._write_int8(self.drtio_dest)
@@ -59,10 +57,7 @@ class CommMgmt:
             raise IOError("Incorrect reply from device: expected e/E.")
 
     def close(self):
-        if not hasattr(self, "socket"):
-            return
         self.socket.close()
-        del self.socket
         logger.debug("disconnected")
 
     # Protocol elements
@@ -71,8 +66,6 @@ class CommMgmt:
         self.socket.sendall(data)
 
     def _write_header(self, ty):
-        self.open()
-
         logger.debug("sending message: type=%r", ty)
         self._write(struct.pack("B", ty.value))
 
@@ -175,7 +168,9 @@ class CommMgmt:
         self._write_header(Request.DebugAllocator)
 
     def flash(self, bin_paths):
+        print("Setting device to flash mode...", end="", flush=True)
         self._write_header(Request.Flash)
+        print("done")
 
         with io.BytesIO() as image_buf:
             for filename in bin_paths:
@@ -189,6 +184,10 @@ class CommMgmt:
             crc = binascii.crc32(image_buf.getvalue())
             image_buf.write(struct.pack(self.endian + "I", crc))
 
+            print("Writing image to device...", end="", flush=True)
             self._write_bytes(image_buf.getvalue())
+            print("done")
 
+        print("Waiting for device reboot...", end="", flush=True)
         self._read_expect(Reply.RebootImminent)
+        print("rebooting")

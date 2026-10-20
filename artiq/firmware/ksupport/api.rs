@@ -59,6 +59,7 @@ static mut API: &'static [(&'static str, *const ())] = &[
     api!(__fixdfsi),
     api!(__fixdfdi),
     api!(__fixunsdfsi),
+    api!(__fixunsdfdi),
     api!(__udivdi3),
     api!(__umoddi3),
     api!(__moddi3),
@@ -142,6 +143,9 @@ static mut API: &'static [(&'static str, *const ())] = &[
 
     api!(now = csr::rtio::NOW_HI_ADDR as *const _),
 
+    api!(malloc = ::malloc),
+    api!(free = ::free),
+
     api!(rpc_send = ::rpc_send),
     api!(rpc_send_async = ::rpc_send_async),
     api!(rpc_recv = ::rpc_recv),
@@ -194,7 +198,7 @@ static mut API: &'static [(&'static str, *const ())] = &[
     /*
      * syscall for unit tests
      * Used in `artiq.tests.coredevice.test_exceptions.ExceptionTest.test_raise_exceptions_kernel`
-     * This syscall checks that the exception IDs used in the Python `EmbeddingMap` (in `artiq.compiler.embedding`)
+     * This syscall checks that the exception IDs used in the Python `EmbeddingMap` (in `artiq.language.embedding_map`)
      * match the `EXCEPTION_ID_LOOKUP` defined in the firmware (`artiq::firmware::ksupport::eh_artiq`)
      */
     api!(test_exception_id_sync = ::eh_artiq::test_exception_id_sync)

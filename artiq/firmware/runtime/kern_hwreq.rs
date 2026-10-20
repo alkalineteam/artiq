@@ -260,12 +260,10 @@ macro_rules! dispatch {
     ($io:ident, $aux_mutex:ident, $ddma_mutex:ident, $subkernel_mutex:ident, $mod_local:ident, $mod_remote:ident, $routing_table:ident, $busno:expr, $func:ident $(, $param:expr)*) => {{
         let destination = ($busno >> 16) as u8;
         let busno = $busno as u8;
-        let hop = $routing_table.0[destination as usize][0];
-        if hop == 0 {
-            $mod_local::$func(busno, $($param, )*)
-        } else {
-            let linkno = hop - 1;
+        if let Some(linkno) = $routing_table.get_linkno(destination, 0) {
             $mod_remote::$func($io, $aux_mutex, $ddma_mutex, $subkernel_mutex, $routing_table, linkno, destination, busno, $($param, )*)
+        } else {
+            $mod_local::$func(busno, $($param, )*)
         }
     }}
 }

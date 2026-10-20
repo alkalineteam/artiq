@@ -4,6 +4,7 @@
       "inputs": {
         "flake-utils": "flake-utils",
         "nixpkgs": [
+          "nac3",
           "nixpkgs"
         ],
         "sipyco": [
@@ -11,11 +12,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1773365427,
-        "narHash": "sha256-oW3vUllAIImM9KlI887gwEWK51LZQvR1lTGzpBxKxI0=",
+        "lastModified": 1790764873,
+        "narHash": "sha256-OXMmEPPfE/vvBBY5RRs+cABiZiOskCGHE4o7j3MJ/i0=",
         "ref": "refs/heads/master",
-        "rev": "c318c7060ed5f1a009ee3b3907e3b38101c9c920",
-        "revCount": 47,
+        "rev": "270ff767bd2e5551e982074c5c1c910b3b5789a6",
+        "revCount": 71,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/artiq-comtools.git"
       },
@@ -64,19 +65,38 @@
         "type": "github"
       }
     },
+    "nac3": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1791812580,
+        "narHash": "sha256-9H2ORRv8QKTmUqVgfNInKDZYN6iTVwqZmYhsE9cygo8=",
+        "ref": "refs/heads/master",
+        "rev": "19474e5adc0796711c50b7deeaff394589471d45",
+        "revCount": 2487,
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/nac3.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/nac3.git"
+      }
+    },
     "naersk": {
       "inputs": {
         "fenix": "fenix",
         "nixpkgs": [
+          "nac3",
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1776200608,
-        "narHash": "sha256-broZ6RFQr4Fv0wT73gGmzNX14A43TmTFF8g4wDKlNss=",
+        "lastModified": 1782220280,
+        "narHash": "sha256-thLTFbp9D5Qknmh8q/v4FRpLGphUSijT3E86cbLYTXo=",
         "owner": "nix-community",
         "repo": "naersk",
-        "rev": "8b23250ab45c2a38cd91031aee26478ca4d0a28e",
+        "rev": "9aa07bb0256d300219b30622d2454e85f7f3667e",
         "type": "github"
       },
       "original": {
@@ -87,30 +107,27 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1778430510,
-        "narHash": "sha256-Ti+ZBvW6yrWWAg2szExVTwCd4qOJ3KlVr1tFHfyfi8Q=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "8fd9daa3db09ced9700431c5b7ad0e8ba199b575",
-        "type": "github"
+        "lastModified": 1790578696,
+        "narHash": "sha256-ZoxIApko70jCdbH3l20HWXOBaT2HZd87orzd2yJ9dVE=",
+        "rev": "7a0f122f5090cf4c2ade2a13a0e229d4e19ba71f",
+        "revCount": 1080855,
+        "type": "tarball",
+        "url": "https://api.flakehub.com/f/pinned/DeterminateSystems/nixpkgs-weekly/0.1.1080855%2Brev-7a0f122f5090cf4c2ade2a13a0e229d4e19ba71f/01a10fba-020b-7731-ab22-ae4ea069e18f/source.tar.gz"
       },
       "original": {
-        "owner": "NixOS",
-        "ref": "nixos-25.11",
-        "repo": "nixpkgs",
-        "type": "github"
+        "type": "tarball",
+        "url": "https://flakehub.com/f/DeterminateSystems/nixpkgs-weekly/0.1"
       }
     },
     "root": {
       "inputs": {
         "artiq-comtools": "artiq-comtools",
+        "nac3": "nac3",
         "naersk": "naersk",
-        "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay",
         "sipyco": "sipyco",
         "src-migen": "src-migen",
-        "src-misoc": "src-misoc",
-        "src-pythonparser": "src-pythonparser"
+        "src-misoc": "src-misoc"
       }
     },
     "rust-analyzer-src": {
@@ -133,6 +150,7 @@
     "rust-overlay": {
       "inputs": {
         "nixpkgs": [
+          "nac3",
           "nixpkgs"
         ]
       },
@@ -154,15 +172,16 @@
     "sipyco": {
       "inputs": {
         "nixpkgs": [
+          "nac3",
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1776943619,
-        "narHash": "sha256-GGw/wCduc/9OEZ1XYwDH7xOPEjUNVJPhI8yk59SmAGA=",
+        "lastModified": 1790563222,
+        "narHash": "sha256-S4MZ1IQFurCT5/IHaR+Wxh0F90O4GaPTreWSYIf+FWU=",
         "ref": "refs/heads/master",
-        "rev": "08114235deb00b7406ab12224c8144c6c310e98a",
-        "revCount": 158,
+        "rev": "75f055c2ee29c09a49912e63ed49c7b7cae953c4",
+        "revCount": 173,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/sipyco.git"
       },
@@ -174,11 +193,11 @@
     "src-migen": {
       "flake": false,
       "locked": {
-        "lastModified": 1768997857,
-        "narHash": "sha256-bdKQUQ3XLc4fV5sYBfKMuHuOS7nlF0ZU7rjWIKDzFzA=",
+        "lastModified": 1789608323,
+        "narHash": "sha256-UTWFbGi3XHczfoCKTlFYJFy95ypDGPUKA9XA8mIOdp4=",
         "ref": "refs/heads/master",
-        "rev": "44e5627d367c528b3ce5e686b6f305a9dfc56f2a",
-        "revCount": 2076,
+        "rev": "beffe831bf1a691eaebf9ddbb4660f8b3e7fd964",
+        "revCount": 2084,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/migen.git"
       },
@@ -190,11 +209,11 @@
     "src-misoc": {
       "flake": false,
       "locked": {
-        "lastModified": 1765867404,
-        "narHash": "sha256-YPYUHVIryXDp4W2hUtHUtBbRKIrbhInWImT0NKaacSY=",
+        "lastModified": 1790917608,
+        "narHash": "sha256-1sbzg6q69D2Y/Vd2swAWPP14ftLAXIw54Mp6SqaxAQE=",
         "ref": "refs/heads/master",
-        "rev": "7ab412de11f6533cd68cd818924da5c28a484ccd",
-        "revCount": 2509,
+        "rev": "8a909c8b638fbec584048d6929d0c577f6be182d",
+        "revCount": 2531,
         "submodules": true,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/misoc.git"
@@ -203,22 +222,6 @@
         "submodules": true,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/misoc.git"
-      }
-    },
-    "src-pythonparser": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1767427016,
-        "narHash": "sha256-E57okn+3gwvtXnF/qF/jypNYqijCLUYOEYLF9ZCzHpE=",
-        "ref": "refs/heads/master",
-        "rev": "a2ace427c84ee5b1e9bd9dbc9b9337e50fc54077",
-        "revCount": 152,
-        "type": "git",
-        "url": "https://git.m-labs.hk/M-Labs/pythonparser.git"
-      },
-      "original": {
-        "type": "git",
-        "url": "https://git.m-labs.hk/M-Labs/pythonparser.git"
       }
     },
     "systems": {

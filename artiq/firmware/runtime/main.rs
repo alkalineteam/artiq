@@ -26,6 +26,7 @@ extern crate board_artiq;
 extern crate logger_artiq;
 extern crate proto_artiq;
 extern crate riscv;
+extern crate refcounting;
 #[cfg(has_drtio)]
 extern crate tar_no_std;
 
@@ -122,9 +123,9 @@ fn startup() {
     setup_log_levels();
     #[cfg(has_i2c)]
     board_misoc::i2c::init().expect("I2C initialization failed");
-    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1rc1", hw_rev = "v2.1")))]
     let (mut io_expander0, mut io_expander1);
-    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1rc1", hw_rev = "v2.1")))]
     {
         io_expander0 = board_misoc::io_expander::IoExpander::new(0).unwrap();
         io_expander1 = board_misoc::io_expander::IoExpander::new(1).unwrap();
@@ -168,7 +169,7 @@ fn startup() {
 
     let neighbor_cache =
         smoltcp::iface::NeighborCache::new(alloc::collections::btree_map::BTreeMap::new());
-    let net_addresses = net_settings::get_adresses();
+    let net_addresses = net_settings::get_addresses();
     info!("network addresses: {}", net_addresses);
     let use_dhcp = if matches!(net_addresses.ipv4_addr, Ipv4AddrConfig::UseDhcp) {
         info!("will try to acquire an IPv4 address with DHCP");
@@ -195,7 +196,7 @@ fn startup() {
 
     #[cfg(has_drtio)]
     let drtio_routing_table = urc::Urc::new(RefCell::new(
-        drtio_routing::config_routing_table(csr::DRTIO.len())));
+        drtio_routing::RoutingTable::from_config(csr::DRTIO.len())));
     #[cfg(not(has_drtio))]
     let drtio_routing_table = urc::Urc::new(RefCell::new(
         drtio_routing::RoutingTable::default_empty()));
@@ -267,7 +268,7 @@ fn startup() {
             debug!("ethernet mac:{}", ethmac::EthernetStatistics::new());
         }
 
-        #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+        #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1rc1", hw_rev = "v2.1")))]
         {
             io_expander0.service().expect("I2C I/O expander #0 service failed");
             io_expander1.service().expect("I2C I/O expander #1 service failed");

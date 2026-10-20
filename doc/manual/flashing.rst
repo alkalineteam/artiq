@@ -15,7 +15,7 @@ Run the command::
 
   $ afws_client <username> build <afws_directory> <variant>
 
-Replace ``<username>`` with the login name that was given to you with the subscription, ``<variant>`` with the name of your system variant, and ``<afws_directory>`` with the name of an empty directory, which will be created by the command if it does not exist. Enter your password when prompted and wait for the build (if applicable) and download to finish. If you experience issues with the AFWS client, write to the helpdesk@ email. For more information about :mod:`~artiq.frontend.afws_client` see also the corresponding entry on the :ref:`Utilities <afws-client>` page.
+Replace ``<username>`` with the login name that was given to you with the subscription, ``<variant>`` with the name of your system variant, and ``<afws_directory>`` with the name of an empty directory, which will be created by the command if it does not exist. Enter your password when prompted and wait for the build (if applicable) and download to finish. If you experience issues with the AFWS client, write an email to helpdesk@m-labs.hk. For more information about :mod:`~artiq.frontend.afws_client` see also the corresponding entry on the :ref:`Utilities <afws-client>` page.
 
 For :ref:`hardcoded variant devices <devices-table>` it is also possible to source firmware from `the M-Labs Hydra server <https://nixbld.m-labs.hk/project/artiq>`_ (in ``main`` and ``zynq``).
 
@@ -55,20 +55,6 @@ On Linux
 
   NixOS users should configure OpenOCD through ``/etc/nixos/configuration.nix`` instead.
 
-Linux using Conda
-^^^^^^^^^^^^^^^^^
-
-  .. note::
-
-    With Conda, install OpenOCD as follows: ::
-
-      $ conda install -c m-labs openocd
-
-  If you are using a Conda environment ``artiq``, then execute the statements below. If you are using a different environment, you will have to replace ``artiq`` with the name of your environment::
-
-    $ sudo cp ~/.conda/envs/artiq/share/openocd/contrib/60-openocd.rules /etc/udev/rules.d
-    $ sudo udevadm trigger
-
 On Windows
 ^^^^^^^^^^
 
@@ -91,7 +77,6 @@ Writing the flash
 If your device is already accessible over the network, all you need is an Ethernet connection and a correct IP address (supplied either with the ``-D`` option or in :ref:`your device database <device-db>`). ::
 
     $ artiq_coremgmt [-D IP_address] flash <afws_directory>
-    $ artiq_coremgmt [-D IP_address] reboot
 
 If the device is not reachable due to corrupted firmware or networking problems, binaries can be loaded manually. On Kasli or KC705, connect the board directly to your computer by JTAG USB and use :mod:`~artiq.frontend.artiq_flash`, as follows: ::
 
@@ -115,7 +100,11 @@ Writing to DRTIO peripherals
 
 Most ARTIQ/Sinara peripherals use no firmware or only very rarely require updates. The exceptions are DRTIO peripherals such as Sinara's Shuttler, Songbird, and Phaser in the MultiTone DDS configuration. These cards operate as DRTIO satellite cores, with a CPU capable of running subkernels, and need to be updated with major ARTIQ version changes.
 
-In a full system update, DRTIO peripherals should be flashed before the core device. They are flashed similarly to Kasli. Connect the card directly to your computer by JTAG USB and use :mod:`~artiq.frontend.artiq_flash`: ::
+In a full system update, DRTIO peripherals should be flashed before the core device. They are flashed similarly to Kasli. If already connected to DRTIO, :mod:`~artiq.frontend.artiq_coremgmt` can be used as above: ::
+
+  $ artiq_coremgmt -s <destination_number> flash <gateware_directory>
+
+Alternatively, connect the card directly to your computer via JTAG adapter and an appropriate cable, then use :mod:`~artiq.frontend.artiq_flash`: ::
 
   $ artiq_flash --srcbuild -t phaser -d <gateware_directory>
   $ artiq_flash --srcbuild -t [efc1v0, efc1v1] -d <gateware_directory>
@@ -123,9 +112,30 @@ In a full system update, DRTIO peripherals should be flashed before the core dev
 .. note::
   Both Shuttler and Songbird are based on the Sinara EEM FMC Carrier and should be flashed with either ``-t efc1v0`` or ``-t efc1v1`` depending on the hardware revision of the EEM FMC Carrier itself, v1.0 or v.1.1. The gateware itself for the two cards is not interchangeable and should not be confused.
 
-Reconfiguring a Phaser in the Classic configuration to MultiTone DDS is as simple as flashing it with MultiTone DDS gateware using the same command described above. 
+Reconfiguring a Phaser in the Classic configuration to MultiTone DDS is as simple as flashing it with MultiTone DDS gateware. Since Phaser Classic is not a DRTIO target, it will be necessary to use :mod:`~artiq.frontend.artiq_flash` for initial setup.
 
-Note however that :mod:`~artiq.frontend.artiq_flash` does not provide an utility for reverting to Phaser Classic or MIQRO gateware, which should be done through the respective flashing procedures for those variants.
+Note that :mod:`~artiq.frontend.artiq_flash` does not provide an utility for reverting to Phaser Classic or MIQRO gateware, which should be done through the respective flashing procedures for those variants.
+
+.. _flash_backup:
+
+Flash backup
+-----------------
+
+Recovering and saving the current flash binaries can be done by running: ::
+
+  $ artiq_flash -t <target> backup=<backup_dir_name>
+
+The backup directory is created and contains the following files:
+
+  - top.bin
+  - bootloader.bin
+  - storage.bin
+  - firmware.fbi
+
+The gateware, storage and firmware files are truncated after being read from flash so that their sizes match the actual stored data rather than the complete flash partitions. 
+The bootloader does not contain information from which its exact binary size can be recovered. Therefore, bootloader.bin contains the complete bootloader flash partition.
+
+The resulting backup directory can be used as source directory for later :mod:`~artiq.frontend.artiq_flash` operations.
 
 .. _connecting-uart:
 

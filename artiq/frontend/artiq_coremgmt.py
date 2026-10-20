@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
 import argparse
+import atexit
 import os
 import struct
 import tempfile
-import atexit
 
 from sipyco import common_args
 
 from artiq import __version__ as artiq_version
-from artiq.flashing import bit2bin, discover_bins
+from artiq.flashing import discover_bins
 from artiq.master.databases import DeviceDB
 from artiq.coredevice.comm_kernel import CommKernel
 from artiq.coredevice.comm_mgmt import CommMgmt
@@ -141,6 +141,8 @@ def main():
     else:
         core_addr = args.device
     mgmt = CommMgmt(core_addr, drtio_dest=args.drtio_dest)
+    mgmt.open()
+    atexit.register(mgmt.close)
 
     if args.tool == "log":
         if args.action == "clear":

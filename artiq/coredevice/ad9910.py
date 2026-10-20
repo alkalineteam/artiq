@@ -1,15 +1,17 @@
-from numpy import int32, int64
+from __future__ import annotations
 
+from typing import Generic, TypeVar
+from numpy import int32, int64, uint32
+
+from artiq.language.core import *
+from artiq.language.units import us, ms
+
+from artiq.coredevice.core import *
 from artiq.coredevice import spi2 as spi
 from artiq.coredevice import urukul
-from artiq.coredevice.urukul import DEFAULT_PROFILE, RegIOUpdate
-from artiq.language.core import at_mu, delay, delay_mu, kernel, now_mu, portable
-from artiq.language.types import TBool, TFloat, TInt32, TInt64, TList, TTuple
-from artiq.language.units import ms, us
+from artiq.coredevice.ttl import TTLOut
+from artiq.coredevice.kasli_i2c import KasliEEPROM  # NAC3TODO
 
-# Work around ARTIQ-Python import machinery
-urukul_sta_pll_lock = urukul.urukul_sta_pll_lock
-urukul_sta_smp_err = urukul.urukul_sta_smp_err
 
 __all__ = [
     "AD9910",
@@ -62,8 +64,12 @@ RAM_MODE_CONT_RAMPUP = 4
 # Default profile for RAM mode
 _DEFAULT_PROFILE_RAM = 0
 
-
+@compile
 class SyncDataUser:
+    core: KernelInvariant[Core]
+    sync_delay_seed: Kernel[int32]
+    io_update_delay: Kernel[int32]
+
     def __init__(self, core, sync_delay_seed, io_update_delay):
         self.core = core
         self.sync_delay_seed = sync_delay_seed
@@ -74,7 +80,14 @@ class SyncDataUser:
         pass
 
 
+@compile
 class SyncDataEeprom:
+    core: KernelInvariant[Core]
+    eeprom_device: KernelInvariant[KasliEEPROM]  # NAC3TODO support generic EEPROM driver
+    eeprom_offset: KernelInvariant[int32]
+    sync_delay_seed: Kernel[int32]
+    io_update_delay: Kernel[int32]
+
     def __init__(self, dmgr, core, eeprom_str):
         self.core = core
 
@@ -100,7 +113,11 @@ class SyncDataEeprom:
         self.io_update_delay = int32(io_update_delay)
 
 
-class AD9910:
+SyncDataT = TypeVar("SyncDataT", SyncDataUser, SyncDataEeprom)
+
+
+@compile
+class AD9910(Generic[SyncDataT]):
     """
     AD9910 DDS channel on Urukul.
 
@@ -113,7 +130,7 @@ class AD9910:
     :param cpld_device: Name of the Urukul CPLD this device is on.
     :param sw_device: Name of the RF switch device. The RF switch is a
         TTLOut channel available as the ``sw`` attribute of this instance.
-    :param pll_en: PLL enable bit, set to 0 to bypass PLL (default: 1).
+    :param pll_en: PLL enable bit, set to False to bypass PLL (default: True).
         Note that when bypassing the PLL the red front panel LED may remain on.
     :param pll_cp: DDS PLL charge pump setting.
     :param pll_vco: DDS PLL VCO range selection.
@@ -130,11 +147,30 @@ class AD9910:
         Can be a string of the form ``eeprom_device:byte_offset`` to read the
         value from a I2C EEPROM, in which case ``sync_delay_seed`` must be set
         to the same string value.
+    :param shared: Indicate this instance controls multiple AD9910 devices.
+        It enables MASK_NU bits control, in conjuction to TTL-based I/O update
+        pulses (if provided by `cpld_device`).
     """
+
+    core: KernelInvariant[Core]
+    cpld: KernelInvariant[urukul.CPLD[Auto]]
+    bus: KernelInvariant[spi.SPIMaster]
+    chip_select: KernelInvariant[int32]
+    pll_en: KernelInvariant[bool]
+    pll_n: KernelInvariant[int32]
+    pll_vco: KernelInvariant[int32]
+    pll_cp: KernelInvariant[int32]
+    ftw_per_hz: KernelInvariant[float]
+    sysclk_per_mu: KernelInvariant[int32]
+    sysclk: KernelInvariant[float]
+    sw: KernelInvariant[Option[TTLOut]]
+    sync_data: KernelInvariant[SyncDataT]
+    io_update: Kernel[urukul.IOUpdate]
+    phase_mode: Kernel[int32]
 
     def __init__(self, dmgr, chip_select, cpld_device, sw_device=None,
                  pll_cp=7, pll_vco=5, sync_delay_seed=-1,
-                 io_update_delay=0, pll_en=1):
+                 io_update_delay=0, pll_en=True, shared=False):
         self.kernel_invariants = {"cpld", "core", "bus", "chip_select",
                                   "pll_en", "pll_n", "pll_vco", "pll_cp",
                                   "ftw_per_hz", "sysclk_per_mu", "sysclk",
@@ -145,10 +181,11 @@ class AD9910:
         assert 3 <= chip_select <= 7
         self.chip_select = chip_select
         if sw_device:
-            self.sw = dmgr.get(sw_device)
-            self.kernel_invariants.add("sw")
+            self.sw = Some(dmgr.get(sw_device))
+        else:
+            self.sw = none
         clk = self.cpld.refclk / [4, 1, 2, 4][self.cpld.clk_div]
-        self.pll_en = pll_en
+        self.pll_en = bool(pll_en)
         self.pll_vco = pll_vco
         self.pll_cp = pll_cp
         if pll_en:
@@ -170,12 +207,11 @@ class AD9910:
         self.sysclk_per_mu = int(round(sysclk * self.core.ref_period))
         self.sysclk = sysclk
 
-        if not self.cpld.io_update:
-            self.io_update = RegIOUpdate(self.cpld, self.chip_select)
-        else:
-            self.io_update = self.cpld.io_update
+        self.io_update = urukul.IOUpdate(self.cpld, self.chip_select, use_mask_nu=shared)
 
-        if isinstance(sync_delay_seed, str) or isinstance(io_update_delay, str):
+        # NAC3TODO
+        if isinstance(sync_delay_seed, str) or isinstance(io_update_delay,
+                                                          str):
             if sync_delay_seed != io_update_delay:
                 raise ValueError("When using EEPROM, sync_delay_seed must be "
                                  "equal to io_update_delay")
@@ -187,7 +223,7 @@ class AD9910:
         self.phase_mode = PHASE_MODE_CONTINUOUS
 
     @kernel
-    def set_phase_mode(self, phase_mode: TInt32):
+    def set_phase_mode(self, phase_mode: int32):
         r"""Set the default phase mode for future calls to :meth:`set` and
         :meth:`set_mu`. Supported phase modes are:
 
@@ -230,7 +266,7 @@ class AD9910:
         self.phase_mode = phase_mode
 
     @kernel
-    def write16(self, addr: TInt32, data: TInt32):
+    def write16(self, addr: int32, data: int32):
         """Write to 16-bit register.
 
         :param addr: Register address
@@ -241,7 +277,7 @@ class AD9910:
         self.bus.write((addr << 24) | ((data & 0xffff) << 8))
 
     @kernel
-    def write32(self, addr: TInt32, data: TInt32):
+    def write32(self, addr: int32, data: int32):
         """Write to 32-bit register.
 
         :param addr: Register address
@@ -255,7 +291,7 @@ class AD9910:
         self.bus.write(data)
 
     @kernel
-    def read16(self, addr: TInt32) -> TInt32:
+    def read16(self, addr: int32) -> int32:
         """Read from 16-bit register.
 
         :param addr: Register address
@@ -270,7 +306,7 @@ class AD9910:
         return self.bus.read()
 
     @kernel
-    def read32(self, addr: TInt32) -> TInt32:
+    def read32(self, addr: int32) -> int32:
         """Read from 32-bit register.
 
         :param addr: Register address
@@ -285,7 +321,7 @@ class AD9910:
         return self.bus.read()
 
     @kernel
-    def read64(self, addr: TInt32) -> TInt64:
+    def read64(self, addr: int32) -> int64:
         """Read from 64-bit register.
 
         :param addr: Register address
@@ -305,14 +341,14 @@ class AD9910:
         self.bus.write(0)
         hi = self.bus.read()
         lo = self.bus.read()
-        return (int64(hi) << 32) | lo
+        return (int64(hi) << 32) | int64(lo)
 
     @kernel
-    def write64(self, addr: TInt32, data_high: TInt32, data_low: TInt32):
+    def write64(self, addr: int32, data_high: int32, data_low: int32):
         """Write to 64-bit register.
 
         :param addr: Register address
-        :param data_high: High (MSB) 32 data bits 
+        :param data_high: High (MSB) 32 data bits
         :param data_low: Low (LSB) 32 data bits
         """
         self.bus.set_config_mu(urukul.SPI_CONFIG, 8,
@@ -326,7 +362,7 @@ class AD9910:
         self.bus.write(data_low)
 
     @kernel
-    def write_ram(self, data: TList(TInt32)):
+    def write_ram(self, data: list[uint32]):
         """Write data to RAM.
 
         The profile to write to and the step, start, and end address
@@ -342,18 +378,18 @@ class AD9910:
         self.bus.set_config_mu(urukul.SPI_CONFIG, 32,
                                urukul.SPIT_DDS_WR, self.chip_select)
         for i in range(len(data) - 1):
-            self.bus.write(data[i])
+            self.bus.write(int32(data[i]))
         self.bus.set_config_mu(urukul.SPI_CONFIG | spi.SPI_END, 32,
                                urukul.SPIT_DDS_WR, self.chip_select)
-        self.bus.write(data[len(data) - 1])
+        self.bus.write(int32(data[len(data) - 1]))
 
     @kernel
-    def read_ram(self, data: TList(TInt32)):
+    def read_ram(self, data: list[uint32]):
         """Read data from RAM.
 
         The profile to read from and the step, start, and end address
         need to be configured before and separately using
-        :meth:`set_profile_ram` and the parent CPLD 
+        :meth:`set_profile_ram` and the parent CPLD
         :meth:`~artiq.coredevice.urukul.ProtoRev9.set_profile`.
 
         :param data: List to be filled with data read from RAM.
@@ -369,27 +405,27 @@ class AD9910:
         for i in range(n):
             self.bus.write(0)
             if i >= preload:
-                data[i - preload] = self.bus.read()
+                data[i - preload] = uint32(self.bus.read())
         self.bus.set_config_mu(
             urukul.SPI_CONFIG | spi.SPI_INPUT | spi.SPI_END, 32,
             urukul.SPIT_DDS_RD, self.chip_select)
         self.bus.write(0)
         for i in range(preload + 1):
-            data[(n - preload) + i] = self.bus.read()
+            data[(n - preload) + i] = uint32(self.bus.read())
 
     @kernel
     def set_cfr1(self,
-                 power_down: TInt32 = 0b0000,
-                 phase_autoclear: TInt32 = 0,
-                 drg_load_lrr: TInt32 = 0,
-                 drg_autoclear: TInt32 = 0,
-                 phase_clear: TInt32 = 0,
-                 internal_profile: TInt32 = 0,
-                 ram_destination: TInt32 = 0,
-                 ram_enable: TInt32 = 0,
-                 manual_osk_external: TInt32 = 0,
-                 osk_enable: TInt32 = 0,
-                 select_auto_osk: TInt32 = 0):
+                 power_down: int32 = 0b0000,
+                 phase_autoclear: int32 = 0,
+                 drg_load_lrr: int32 = 0,
+                 drg_autoclear: int32 = 0,
+                 phase_clear: int32 = 0,
+                 internal_profile: int32 = 0,
+                 ram_destination: int32 = 0,
+                 ram_enable: int32 = 0,
+                 manual_osk_external: int32 = 0,
+                 osk_enable: int32 = 0,
+                 select_auto_osk: int32 = 0):
         """Set CFR1. See the AD9910 datasheet for parameter meanings and sizes.
 
         This method does not pulse ``IO_UPDATE.``
@@ -423,15 +459,15 @@ class AD9910:
                      2)  # SDIO input only, MSB first
 
     @kernel
-    def set_cfr2(self, 
-                 asf_profile_enable: TInt32 = 1, 
-                 drg_destination: TInt32 = 0,
-                 drg_enable: TInt32 = 0, 
-                 drg_nodwell_high: TInt32 = 0,
-                 drg_nodwell_low: TInt32 = 0,
-                 effective_ftw: TInt32 = 1,
-                 sync_validation_disable: TInt32 = 0, 
-                 matched_latency_enable: TInt32 = 0):
+    def set_cfr2(self,
+                 asf_profile_enable: int32 = 1,
+                 drg_destination: int32 = 0,
+                 drg_enable: int32 = 0,
+                 drg_nodwell_high: int32 = 0,
+                 drg_nodwell_low: int32 = 0,
+                 effective_ftw: int32 = 1,
+                 sync_validation_disable: int32 = 0,
+                 matched_latency_enable: int32 = 0):
         """Set CFR2. See the AD9910 datasheet for parameter meanings and sizes.
 
         This method does not pulse ``IO_UPDATE``.
@@ -463,11 +499,11 @@ class AD9910:
                      (sync_validation_disable << 5))
 
     @kernel
-    def init(self, blind: TBool = False, dds_channel_idx: TInt32 = 0):
+    def init(self, blind: bool = False, dds_channel_idx: int32 = 0):
         """Initialize and configure the DDS.
 
         Sets up SPI mode, confirms chip presence, powers down unused blocks,
-        configures the PLL, waits for PLL lock. Uses the ``IO_UPDATE`` 
+        configures the PLL, waits for PLL lock. Uses the ``IO_UPDATE``
         signal multiple times.
 
         :param blind: Do not read back DDS identity and do not wait for lock.
@@ -476,73 +512,78 @@ class AD9910:
         if self.sync_data.sync_delay_seed >= 0 and not self.cpld.sync_div:
             raise ValueError("parent CPLD does not drive SYNC")
         if self.sync_data.sync_delay_seed >= 0:
-            if self.sysclk_per_mu != self.sysclk * self.core.ref_period:
+            if float(self.sysclk_per_mu) != self.sysclk * self.core.ref_period:
                 raise ValueError("incorrect clock ratio for synchronization")
-        delay(50 * ms)  # slack
+        # sync_data.init() may read an EEPROM over I2C, which does not advance
+        # the timeline and can take arbitrarily long (e.g. on DRTIO satellites).
+        self.core.break_realtime()
 
         # Set SPI mode
         self.set_cfr1()
-        self.io_update.pulse(1 * ms)
-        delay(1 * ms)
+        self.io_update.pulse(1. * us)
+        self.core.delay(1. * ms)
         if not blind:
             # Use the AUX DAC setting to identify and confirm presence
             aux_dac = self.read32(_AD9910_REG_AUX_DAC)
             if aux_dac & 0xff != 0x7f:
                 raise ValueError("Urukul AD9910 AUX_DAC mismatch")
-            delay(50 * us)  # slack
+            self.core.delay(50. * us)  # slack
         # Configure PLL settings and bring up PLL
         # enable amplitude scale from profiles
         # read effective FTW
         # sync timing validation disable (enabled later)
+        self.core.break_realtime()
         self.set_cfr2(sync_validation_disable=1)
-        self.io_update.pulse(1 * ms)
+        self.io_update.pulse(1. * us)
         cfr3 = (0x0807c000 | (self.pll_vco << 24) |
-                (self.pll_cp << 19) | (self.pll_en << 8) |
-                (self.pll_n << 1))
+                (self.pll_cp << 19) | (int32(self.pll_en) << 8) |
+                (int32(self.pll_n) << 1))
         self.write32(_AD9910_REG_CFR3, cfr3 | 0x400)  # PFD reset
-        self.io_update.pulse(1 * us)
+        self.io_update.pulse(1. * us)
         if self.pll_en:
             self.write32(_AD9910_REG_CFR3, cfr3)
-            self.io_update.pulse(1 * ms)
+            self.io_update.pulse(1. * us)
             if blind:
-                delay(100 * ms)
+                self.core.delay(100. * ms)
             else:
                 # Wait for PLL lock, up to 100 ms
                 for i in range(100):
                     sta = self.cpld.sta_read()
-                    lock = urukul_sta_pll_lock(sta)
-                    delay(1 * ms)
+                    lock = urukul.urukul_sta_pll_lock(sta)
+                    self.core.delay(1. * ms)
                     if self.chip_select == 3:
                         lock_bit_offset = dds_channel_idx
                     else:
                         lock_bit_offset = self.chip_select - 4
-                    if lock & (1 << lock_bit_offset):
+                    if bool(lock & (1 << lock_bit_offset)):
                         break
                     if i >= 100 - 1:
                         raise ValueError("PLL lock timeout")
-        delay(10 * us)  # slack
+        self.core.delay(10. * us)  # slack
         if self.sync_data.sync_delay_seed >= 0 and not blind and self.chip_select != 3:
             self.tune_sync_delay(self.sync_data.sync_delay_seed)
-        delay(1 * ms)
+        self.core.delay(1. * ms)
         # FIXME: Re-write the configuration (needed for proper
         # initialization when using RegIOUpdate).
-        self.cpld.cfg_write(self.cpld.cfg_reg)
+        # NAC3TODO
+        # self.cpld.cfg_write(self.cpld.cfg_reg)
 
     @kernel
-    def power_down(self, bits: TInt32 = 0b1111):
+    def power_down(self, bits: int32 = 0b1111):
         """Power down DDS.
 
         :param bits: Power-down bits, see datasheet
         """
         self.set_cfr1(power_down=bits)
-        self.io_update.pulse(1 * us)
+        self.io_update.pulse(1. * us)
 
     @kernel
-    def set_mu(self, ftw: TInt32 = 0, pow_: TInt32 = 0, asf: TInt32 = 0x3fff,
-               phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
-               ref_time_mu: TInt64 = int64(-1),
-               profile: TInt32 = DEFAULT_PROFILE,
-               ram_destination: TInt32 = -1) -> TInt32:
+    def set_mu(self, ftw: uint32 = uint32(0), pow_: uint32 = uint32(0),
+               asf: uint32 = uint32(0x3fff),
+               phase_mode: int32 = _PHASE_MODE_DEFAULT,
+               ref_time_mu: int64 = int64(-1),
+               profile: int32 = urukul.DEFAULT_PROFILE,
+               ram_destination: int32 = -1) -> uint32:
         """Set DDS data in machine units.
 
         This uses machine units (FTW, POW, ASF). The frequency tuning word
@@ -585,23 +626,23 @@ class AD9910:
             phase_mode = self.phase_mode
         # Align to coarse RTIO which aligns SYNC_CLK. I.e. clear fine TSC
         # This will not cause a collision or sequence error.
-        at_mu(now_mu() & ~7)
+        at_mu(now_mu() & ~int64(7))
         if phase_mode != PHASE_MODE_CONTINUOUS:
             # Auto-clear phase accumulator on IO_UPDATE.
             # This is active already for the next IO_UPDATE
             self.set_cfr1(phase_autoclear=1)
-            if phase_mode == PHASE_MODE_TRACKING and ref_time_mu < 0:
+            if phase_mode == PHASE_MODE_TRACKING and ref_time_mu < int64(0):
                 # set default fiducial time stamp
-                ref_time_mu = 0
-            if ref_time_mu >= 0:
+                ref_time_mu = int64(0)
+            if ref_time_mu >= int64(0):
                 # 32 LSB are sufficient.
                 # Also no need to use IO_UPDATE time as this
                 # is equivalent to an output pipeline latency.
                 dt = int32(now_mu()) - int32(ref_time_mu)
-                pow_ += dt * ftw * self.sysclk_per_mu >> 16
+                pow_ += uint32(dt * int32(ftw) * self.sysclk_per_mu >> 16)
         if ram_destination == -1:
             self.write64(_AD9910_REG_PROFILE0 + profile,
-                         (asf << 16) | (pow_ & 0xffff), ftw)
+                         int32((asf << 16) | (pow_ & uint32(0xffff))), int32(ftw))
         else:
             if not ram_destination == RAM_DEST_FTW:
                 self.set_ftw(ftw)
@@ -611,16 +652,16 @@ class AD9910:
                 if not ram_destination == RAM_DEST_POW:
                     self.set_pow(pow_)
         delay_mu(int64(self.sync_data.io_update_delay))
-        self.io_update.pulse_mu(8)  # assumes 8 mu > t_SYN_CCLK
-        at_mu(now_mu() & ~7)  # clear fine TSC again
+        self.io_update.pulse_mu(int64(8))  # assumes 8 mu > t_SYN_CCLK
+        at_mu(now_mu() & ~int64(7))  # clear fine TSC again
         if phase_mode != PHASE_MODE_CONTINUOUS:
             self.set_cfr1()
             # future IO_UPDATE will activate
         return pow_
 
     @kernel
-    def get_mu(self, profile: TInt32 = DEFAULT_PROFILE
-               ) -> TTuple([TInt32, TInt32, TInt32]):
+    def get_mu(self, profile: int32 = urukul.DEFAULT_PROFILE
+               ) -> tuple[uint32, uint32, uint32]:
         """Get the frequency tuning word, phase offset word,
         and amplitude scale factor.
 
@@ -633,16 +674,16 @@ class AD9910:
         # Read data
         data = int64(self.read64(_AD9910_REG_PROFILE0 + profile))
         # Extract and return fields
-        ftw = int32(data)
-        pow_ = int32((data >> 32) & 0xffff)
-        asf = int32((data >> 48) & 0x3fff)
+        ftw = uint32(data)
+        pow_ = uint32(data >> 32) & uint32(0xffff)
+        asf = uint32(data >> 48) & uint32(0x3fff)
         return ftw, pow_, asf
 
     @kernel
-    def set_profile_ram(self, start: TInt32, end: TInt32, step: TInt32 = 1,
-                        profile: TInt32 = _DEFAULT_PROFILE_RAM,
-                        nodwell_high: TInt32 = 0, zero_crossing: TInt32 = 0,
-                        mode: TInt32 = 1):
+    def set_profile_ram(self, start: int32, end: int32, step: int32 = 1,
+                        profile: int32 = _DEFAULT_PROFILE_RAM,
+                        nodwell_high: int32 = 0, zero_crossing: int32 = 0,
+                        mode: int32 = 1):
         """Set the RAM profile settings. See also AD9910 datasheet.
 
         :param start: Profile start address in RAM (10-bit).
@@ -666,102 +707,102 @@ class AD9910:
         self.write64(_AD9910_REG_PROFILE0 + profile, hi, lo)
 
     @kernel
-    def set_ftw(self, ftw: TInt32):
+    def set_ftw(self, ftw: uint32):
         """Set the value stored to the AD9910's frequency tuning word (FTW)
         register.
 
         :param ftw: Frequency tuning word to be stored, range: 0 to 0xffffffff.
         """
-        self.write32(_AD9910_REG_FTW, ftw)
+        self.write32(_AD9910_REG_FTW, int32(ftw))
 
     @kernel
-    def set_asf(self, asf: TInt32):
+    def set_asf(self, asf: uint32):
         """Set the value stored to the AD9910's amplitude scale factor (ASF)
         register.
 
         :param asf: Amplitude scale factor to be stored, range: 0 to 0x3fff.
         """
-        self.write32(_AD9910_REG_ASF, asf << 2)
+        self.write32(_AD9910_REG_ASF, int32(asf << 2))
 
     @kernel
-    def set_pow(self, pow_: TInt32):
+    def set_pow(self, pow_: uint32):
         """Set the value stored to the AD9910's phase offset word (POW)
         register.
 
         :param pow_: Phase offset word to be stored, range: 0 to 0xffff.
         """
-        self.write16(_AD9910_REG_POW, pow_)
+        self.write16(_AD9910_REG_POW, int32(pow_))
 
     @kernel
-    def get_ftw(self) -> TInt32:
+    def get_ftw(self) -> uint32:
         """Get the value stored to the AD9910's frequency tuning word (FTW)
         register.
 
         :return: Frequency tuning word
         """
-        return self.read32(_AD9910_REG_FTW)
+        return uint32(self.read32(_AD9910_REG_FTW))
 
     @kernel
-    def get_asf(self) -> TInt32:
+    def get_asf(self) -> uint32:
         """Get the value stored to the AD9910's amplitude scale factor (ASF)
         register.
 
         :return: Amplitude scale factor
         """
-        return self.read32(_AD9910_REG_ASF) >> 2
+        return uint32(self.read32(_AD9910_REG_ASF) >> 2)
 
     @kernel
-    def get_pow(self) -> TInt32:
+    def get_pow(self) -> uint32:
         """Get the value stored to the AD9910's phase offset word (POW)
         register.
 
         :return: Phase offset word
         """
-        return self.read16(_AD9910_REG_POW)
+        return uint32(self.read16(_AD9910_REG_POW))
 
-    @portable(flags={"fast-math"})
-    def frequency_to_ftw(self, frequency: TFloat) -> TInt32:
+    @portable
+    def frequency_to_ftw(self, frequency: float) -> uint32:
         """Return the 32-bit frequency tuning word corresponding to the given
         frequency.
         """
-        return int32(round(self.ftw_per_hz * frequency))
+        return uint32(round(self.ftw_per_hz * frequency))
 
-    @portable(flags={"fast-math"})
-    def ftw_to_frequency(self, ftw: TInt32) -> TFloat:
+    @portable
+    def ftw_to_frequency(self, ftw: uint32) -> float:
         """Return the frequency corresponding to the given frequency tuning
         word.
         """
-        return ftw / self.ftw_per_hz
+        return float(ftw) / self.ftw_per_hz
 
-    @portable(flags={"fast-math"})
-    def turns_to_pow(self, turns: TFloat) -> TInt32:
+    @portable
+    def turns_to_pow(self, turns: float) -> uint32:
         """Return the 16-bit phase offset word corresponding to the given phase
         in turns."""
-        return int32(round(turns * 0x10000)) & int32(0xffff)
+        return uint32(round(turns * float(0x10000)) & 0xffff)
 
-    @portable(flags={"fast-math"})
-    def pow_to_turns(self, pow_: TInt32) -> TFloat:
+    @portable
+    def pow_to_turns(self, pow_: uint32) -> float:
         """Return the phase in turns corresponding to a given phase offset
         word."""
-        return pow_ / 0x10000
+        return float(pow_) / float(0x10000)
 
-    @portable(flags={"fast-math"})
-    def amplitude_to_asf(self, amplitude: TFloat) -> TInt32:
+    @portable
+    def amplitude_to_asf(self, amplitude: float) -> uint32:
         """Return 14-bit amplitude scale factor corresponding to given
         fractional amplitude."""
-        code = int32(round(amplitude * 0x3fff))
+        code = round(amplitude * float(0x3fff))
         if code < 0 or code > 0x3fff:
             raise ValueError("Invalid AD9910 fractional amplitude!")
-        return code
+        return uint32(code)
 
-    @portable(flags={"fast-math"})
-    def asf_to_amplitude(self, asf: TInt32) -> TFloat:
+    @portable
+    def asf_to_amplitude(self, asf: uint32) -> float:
         """Return amplitude as a fraction of full scale corresponding to given
         amplitude scale factor."""
-        return asf / float(0x3fff)
+        return float(asf) / float(0x3fff)
 
-    @portable(flags={"fast-math"})
-    def frequency_to_ram(self, frequency: TList(TFloat), ram: TList(TInt32)):
+    @portable
+    def frequency_to_ram(self, frequency: list[float], ram: list[uint32]):
         """Convert frequency values to RAM profile data.
 
         To be used with :const:`RAM_DEST_FTW`.
@@ -773,8 +814,8 @@ class AD9910:
         for i in range(len(ram)):
             ram[i] = self.frequency_to_ftw(frequency[i])
 
-    @portable(flags={"fast-math"})
-    def turns_to_ram(self, turns: TList(TFloat), ram: TList(TInt32)):
+    @portable
+    def turns_to_ram(self, turns: list[float], ram: list[uint32]):
         """Convert phase values to RAM profile data.
 
         To be used with :const:`RAM_DEST_POW`.
@@ -786,8 +827,8 @@ class AD9910:
         for i in range(len(ram)):
             ram[i] = self.turns_to_pow(turns[i]) << 16
 
-    @portable(flags={"fast-math"})
-    def amplitude_to_ram(self, amplitude: TList(TFloat), ram: TList(TInt32)):
+    @portable
+    def amplitude_to_ram(self, amplitude: list[float], ram: list[uint32]):
         """Convert amplitude values to RAM profile data.
 
         To be used with :const:`RAM_DEST_ASF`.
@@ -799,9 +840,9 @@ class AD9910:
         for i in range(len(ram)):
             ram[i] = self.amplitude_to_asf(amplitude[i]) << 18
 
-    @portable(flags={"fast-math"})
-    def turns_amplitude_to_ram(self, turns: TList(TFloat),
-                               amplitude: TList(TFloat), ram: TList(TInt32)):
+    @portable
+    def turns_amplitude_to_ram(self, turns: list[float],
+                               amplitude: list[float], ram: list[uint32]):
         """Convert phase and amplitude values to RAM profile data.
 
         To be used with :const:`RAM_DEST_POWASF`.
@@ -813,10 +854,10 @@ class AD9910:
         """
         for i in range(len(ram)):
             ram[i] = ((self.turns_to_pow(turns[i]) << 16) |
-                      self.amplitude_to_asf(amplitude[i]) << 2)
+                      (self.amplitude_to_asf(amplitude[i]) << 2))
 
     @kernel
-    def set_frequency(self, frequency: TFloat):
+    def set_frequency(self, frequency: float):
         """Set the value stored to the AD9910's frequency tuning word (FTW)
         register.
 
@@ -825,7 +866,7 @@ class AD9910:
         self.set_ftw(self.frequency_to_ftw(frequency))
 
     @kernel
-    def set_amplitude(self, amplitude: TFloat):
+    def set_amplitude(self, amplitude: float):
         """Set the value stored to the AD9910's amplitude scale factor (ASF)
         register.
 
@@ -834,7 +875,7 @@ class AD9910:
         self.set_asf(self.amplitude_to_asf(amplitude))
 
     @kernel
-    def set_phase(self, turns: TFloat):
+    def set_phase(self, turns: float):
         """Set the value stored to the AD9910's phase offset word (POW)
         register.
 
@@ -843,7 +884,7 @@ class AD9910:
         self.set_pow(self.turns_to_pow(turns))
 
     @kernel
-    def get_frequency(self) -> TFloat:
+    def get_frequency(self) -> float:
         """Get the value stored to the AD9910's frequency tuning word (FTW)
         register.
 
@@ -852,7 +893,7 @@ class AD9910:
         return self.ftw_to_frequency(self.get_ftw())
 
     @kernel
-    def get_amplitude(self) -> TFloat:
+    def get_amplitude(self) -> float:
         """Get the value stored to the AD9910's amplitude scale factor (ASF)
         register.
 
@@ -861,7 +902,7 @@ class AD9910:
         return self.asf_to_amplitude(self.get_asf())
 
     @kernel
-    def get_phase(self) -> TFloat:
+    def get_phase(self) -> float:
         """Get the value stored to the AD9910's phase offset word (POW)
         register.
 
@@ -870,10 +911,10 @@ class AD9910:
         return self.pow_to_turns(self.get_pow())
 
     @kernel
-    def set(self, frequency: TFloat = 0.0, phase: TFloat = 0.0,
-            amplitude: TFloat = 1.0, phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
-            ref_time_mu: TInt64 = int64(-1), profile: TInt32 = DEFAULT_PROFILE,
-            ram_destination: TInt32 = -1) -> TFloat:
+    def set(self, frequency: float = 0.0, phase: float = 0.0,
+            amplitude: float = 1.0, phase_mode: int32 = _PHASE_MODE_DEFAULT,
+            ref_time_mu: int64 = int64(-1), profile: int32 = urukul.DEFAULT_PROFILE,
+            ram_destination: int32 = -1) -> float:
         """Set DDS data in SI units.
 
         See also :meth:`AD9910.set_mu`.
@@ -893,8 +934,8 @@ class AD9910:
             profile, ram_destination))
 
     @kernel
-    def get(self, profile: TInt32 = DEFAULT_PROFILE
-            ) -> TTuple([TFloat, TFloat, TFloat]):
+    def get(self, profile: int32 = urukul.DEFAULT_PROFILE
+            ) -> tuple[float, float, float]:
         """Get the frequency, phase, and amplitude.
 
         See also :meth:`AD9910.get_mu`.
@@ -910,11 +951,11 @@ class AD9910:
                 self.asf_to_amplitude(asf))
 
     @kernel
-    def set_att_mu(self, att: TInt32):
+    def set_att_mu(self, att: int32):
         """Set digital step attenuator in machine units.
 
-        This method will write the attenuator settings of this channel
-        (For Urukul proto_rev 0x08, all four channels will be updated at same time).
+        This method will write the attenuator settings of the channel
+        (Urukul proto_rev 0x08, all four channels will be updated at same time).
         See also
         :meth:`CPLD.get_channel_att <artiq.coredevice.urukul.CPLD.set_att_mu>`.
 
@@ -923,11 +964,11 @@ class AD9910:
         self.cpld.set_att_mu(self.chip_select - 4, att)
 
     @kernel
-    def set_att(self, att: TFloat):
+    def set_att(self, att: float):
         """Set digital step attenuator in SI units.
 
-        This method will write the attenuator settings of this channel
-        (For Urukul proto_rev 0x08, all four channels will be updated at same time).
+        This method will write the attenuator settings of the channel
+        (Urukul proto_rev 0x08, all four channels will be updated at same time).
         See also
         :meth:`CPLD.get_channel_att <artiq.coredevice.urukul.CPLD.set_att>`.
 
@@ -936,7 +977,7 @@ class AD9910:
         self.cpld.set_att(self.chip_select - 4, att)
 
     @kernel
-    def get_att_mu(self) -> TInt32:
+    def get_att_mu(self) -> int32:
         """Get digital step attenuator value in machine units. See also
         :meth:`CPLD.get_channel_att <artiq.coredevice.urukul.CPLD.get_channel_att_mu>`.
 
@@ -945,8 +986,8 @@ class AD9910:
         return self.cpld.get_channel_att_mu(self.chip_select - 4)
 
     @kernel
-    def get_att(self) -> TFloat:
-        """Get digital step attenuator value in SI units. See also 
+    def get_att(self) -> float:
+        """Get digital step attenuator value in SI units. See also
         :meth:`CPLD.get_channel_att <artiq.coredevice.urukul.CPLD.get_channel_att>`.
 
         :return: Attenuation in dB.
@@ -954,7 +995,7 @@ class AD9910:
         return self.cpld.get_channel_att(self.chip_select - 4)
 
     @kernel
-    def cfg_sw(self, state: TBool):
+    def cfg_sw(self, state: bool):
         """Set CPLD CFG RF switch state. The RF switch is controlled by the
         logical OR of the CPLD configuration shift register
         RF switch bit and the SW TTL line (if used).
@@ -964,7 +1005,7 @@ class AD9910:
         self.cpld.cfg_sw(self.chip_select - 4, state)
 
     @kernel
-    def cfg_osk(self, state: TBool):
+    def cfg_osk(self, state: bool):
         """Set CPLD CFG OSK state.
 
         :param state: CPLD CFG OSK bit
@@ -972,7 +1013,7 @@ class AD9910:
         self.cpld.cfg_osk(self.chip_select - 4, state)
 
     @kernel
-    def cfg_drctl(self, state: TBool):
+    def cfg_drctl(self, state: bool):
         """Set CPLD CFG DRCTL state.
 
         :param state: CPLD CFG DRCTL bit
@@ -980,7 +1021,7 @@ class AD9910:
         self.cpld.cfg_drctl(self.chip_select - 4, state)
 
     @kernel
-    def cfg_drhold(self, state: TBool):
+    def cfg_drhold(self, state: bool):
         """Set CPLD CFG DRHOLD state.
 
         :param state: CPLD CFG DRHOLD bit
@@ -988,7 +1029,7 @@ class AD9910:
         self.cpld.cfg_drhold(self.chip_select - 4, state)
 
     @kernel
-    def cfg_mask_nu(self, state: TBool):
+    def cfg_mask_nu(self, state: bool):
         """Set CPLD CFG MASK_NU state.
 
         :param state: CPLD CFG MASK_NU bit
@@ -996,7 +1037,7 @@ class AD9910:
         self.cpld.cfg_mask_nu(self.chip_select - 4, state)
 
     @kernel
-    def cfg_att_en(self, state: TBool):
+    def cfg_att_en(self, state: bool):
         """Set CPLD CFG ATT_EN state.
 
         :param state: CPLD CFG ATT_EN bit
@@ -1004,7 +1045,7 @@ class AD9910:
         self.cpld.cfg_att_en(self.chip_select - 4, state)
 
     @kernel
-    def set_profile(self, profile: TInt32):
+    def set_profile(self, profile: int32):
         """Set the PROFILE pins.
 
         .. warning::
@@ -1018,10 +1059,10 @@ class AD9910:
         self.cpld.set_profile(self.chip_select - 4, profile)
 
     @kernel
-    def set_sync(self, 
-                 in_delay: TInt32, 
-                 window: TInt32, 
-                 en_sync_gen: TInt32 = 0):
+    def set_sync(self,
+                 in_delay: int32,
+                 window: int32,
+                 en_sync_gen: int32 = 0):
         """Set the relevant parameters in the multi device synchronization
         register. See the AD9910 datasheet for details. The ``SYNC`` clock
         generator preset value is set to zero, and the ``SYNC_OUT`` generator is
@@ -1054,15 +1095,15 @@ class AD9910:
         Also modifies CFR2.
         """
         self.set_cfr2(sync_validation_disable=1)  # clear SMP_ERR
-        self.io_update.pulse(1 * us)
-        delay(10 * us)  # slack
+        self.io_update.pulse(1. * us)
+        self.core.delay(10. * us)  # slack
         self.set_cfr2(sync_validation_disable=0)  # enable SMP_ERR
-        self.io_update.pulse(1 * us)
+        self.io_update.pulse(1. * us)
 
     @kernel
     def tune_sync_delay(self,
-                        search_seed: TInt32 = 15,
-                        dds_channel_idx=0) -> TTuple([TInt32, TInt32]):
+                        search_seed: int32 = 15,
+                        dds_channel_idx: int32 = 0) -> tuple[int32, int32]:
         """Find a stable ``SYNC_IN`` delay.
 
         This method first locates a valid ``SYNC_IN`` delay at zero validation
@@ -1089,7 +1130,7 @@ class AD9910:
             next_seed = -1
             for in_delay in range(search_span - 2 * window):
                 # alternate search direction around search_seed
-                if in_delay & 1:
+                if in_delay & 1 != 0:
                     in_delay = -in_delay
                 in_delay = search_seed + (in_delay >> 1)
                 if in_delay < 0 or in_delay > 31:
@@ -1097,11 +1138,11 @@ class AD9910:
                 self.set_sync(in_delay, window)
                 self.clear_smp_err()
                 # integrate SMP_ERR statistics for a few hundred cycles
-                delay(100 * us)
-                err = urukul_sta_smp_err(self.cpld.sta_read())
-                delay(100 * us)  # slack
+                self.core.delay(100. * us)
+                err = urukul.urukul_sta_smp_err(self.cpld.sta_read())
+                self.core.delay(100. * us)  # slack
                 err_offset = dds_channel_idx if self.chip_select == 3 else (self.chip_select - 4)
-                if not (err >> err_offset) & 1:
+                if not bool((err >> err_offset) & 1):
                     next_seed = in_delay
                     break
             if next_seed >= 0:  # valid delay found, scan next window
@@ -1112,15 +1153,15 @@ class AD9910:
                 window = max(min_window, window - 1 - margin)
                 self.set_sync(search_seed, window)
                 self.clear_smp_err()
-                delay(100 * us)  # slack
+                self.core.delay(100. * us)  # slack
                 return search_seed, window
             else:
                 break
         raise ValueError("no valid window/delay")
 
     @kernel
-    def measure_io_update_alignment(self, delay_start: TInt64,
-                                    delay_stop: TInt64) -> TInt32:
+    def measure_io_update_alignment(self, delay_start: int64,
+                                    delay_stop: int64) -> int32:
         """Use the digital ramp generator to locate the alignment between
         ``IO_UPDATE`` and ``SYNC_CLK``.
 
@@ -1144,25 +1185,25 @@ class AD9910:
         # dFTW = 1, (work around negative slope)
         self.write64(_AD9910_REG_RAMP_STEP, -1, 0)
         # delay io_update after RTIO edge
-        t = now_mu() + 8 & ~7
+        t = now_mu() + int64(8) & ~int64(7)
         at_mu(t + delay_start)
         # assumes a maximum t_SYNC_CLK period
-        self.io_update.pulse_mu(16 - delay_start)  # realign
+        self.io_update.pulse_mu(int64(16) - delay_start)  # realign
         # disable DRG autoclear and LRR on io_update
         self.set_cfr1()
         # stop DRG
         self.write64(_AD9910_REG_RAMP_STEP, 0, 0)
-        at_mu(t + 0x1000 + delay_stop)
-        self.io_update.pulse_mu(16 - delay_stop)  # realign
+        at_mu(t + int64(0x1000) + delay_stop)
+        self.io_update.pulse_mu(int64(16) - delay_stop)  # realign
         ftw = self.read32(_AD9910_REG_FTW)  # read out effective FTW
-        delay(100 * us)  # slack
+        self.core.delay(100. * us)  # slack
         # disable DRG
         self.set_cfr2(drg_enable=0)
-        self.io_update.pulse_mu(8)
+        self.io_update.pulse_mu(int64(8))
         return ftw & 1
 
     @kernel
-    def tune_io_update_delay(self) -> TInt32:
+    def tune_io_update_delay(self) -> int32:
         """Find a stable ``IO_UPDATE`` delay alignment.
 
         Scan through increasing ``IO_UPDATE`` delays until a delay is found that
@@ -1184,14 +1225,14 @@ class AD9910:
             t = 0
             # check whether the sync edge is strictly between i, i+2
             for j in range(repeat):
-                t += self.measure_io_update_alignment(i, i + 2)
+                t += self.measure_io_update_alignment(int64(i), int64(i + 2))
             if t != 0:  # no certain edge
                 continue
             # check left/right half: i,i+1 and i+1,i+2
             t1 = [0, 0]
             for j in range(repeat):
-                t1[0] += self.measure_io_update_alignment(i, i + 1)
-                t1[1] += self.measure_io_update_alignment(i + 1, i + 2)
+                t1[0] += self.measure_io_update_alignment(int64(i), int64(i + 1))
+                t1[1] += self.measure_io_update_alignment(int64(i + 1), int64(i + 2))
             if ((t1[0] == 0 and t1[1] == 0) or
                     (t1[0] == repeat and t1[1] == repeat)):
                 # edge is not close to i + 1, can't interpret result

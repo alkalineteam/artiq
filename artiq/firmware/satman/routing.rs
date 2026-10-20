@@ -1,7 +1,5 @@
 use alloc::{vec::Vec, collections::vec_deque::VecDeque};
 use board_artiq::{drtioaux, drtio_routing};
-#[cfg(has_drtio_routing)]
-use board_misoc::csr;
 use core::cmp::min;
 use proto_artiq::drtioaux_proto::PayloadStatus;
 use SAT_PAYLOAD_MAX_SIZE;
@@ -91,18 +89,17 @@ impl Router {
     // messages are always buffered for both upstream and downstream
     pub fn route(&mut self, packet: drtioaux::Packet,
         _routing_table: &drtio_routing::RoutingTable, _rank: u8,
-        self_destination: u8
+        _self_destination: u8
     ) {
         let destination = packet.routable_destination();
         #[cfg(has_drtio_routing)]
         {
             if let Some(destination) = destination {
-                let hop = _routing_table.0[destination as usize][_rank as usize] as usize;
-                if destination == self_destination {
+                let hop = _routing_table.get_hop(destination, _rank) as usize;
+                if hop == 0 {
                     self.local_queue.push_back(packet);
-                } else if hop > 0 && hop < csr::DRTIOREP.len() {
-                    let repno = (hop - 1) as usize;
-                    self.downstream_queue.push_back((repno, packet));
+                } else if let Some(repno) = _routing_table.get_linkno(destination, _rank) {
+                    self.downstream_queue.push_back((repno as usize, packet));
                 } else {
                     self.upstream_queue.push_back(packet);
                 }
@@ -112,7 +109,7 @@ impl Router {
         }
         #[cfg(not(has_drtio_routing))]
         {
-            if destination == Some(self_destination) {
+            if destination == Some(_self_destination) {
                 self.local_queue.push_back(packet);
             } else {
                 self.upstream_queue.push_back(packet);
@@ -129,17 +126,10 @@ impl Router {
         {
             let destination = packet.routable_destination();
             if let Some(destination) = destination {
-                let hop = _routing_table.0[destination as usize][_rank as usize] as usize;
-                if destination == 0 {
-                    // response is needed immediately if master required it
-                    drtioaux::send(0, &packet)?;
-                } else if !(hop > 0 && hop < csr::DRTIOREP.len()) {
-                    // higher rank can wait
-                    self.upstream_queue.push_back(packet);
+                if let Some(linkno) = _routing_table.get_linkno(destination, _rank) {
+                    self.downstream_queue.push_back((linkno as usize, packet));
                 } else {
-                    let repno = (hop - 1) as usize;
-                    // transaction will occur at closest possible opportunity
-                    self.downstream_queue.push_back((repno, packet));
+                    self.upstream_queue.push_back(packet);
                 }
                 Ok(())
             } else {

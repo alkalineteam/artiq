@@ -307,11 +307,16 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
             return
         arginfo = expdesc["arginfo"]
         for k, v in overrides.items():
-            # Some values (e.g. scans) may have multiple defaults in a list
-            if ("default" in arginfo[k][0] and isinstance(arginfo[k][0]["default"], list)):
-                arginfo[k][0]["default"].insert(0, v)
+            if k in arginfo:
+                # Some values (e.g. scans) may have multiple defaults in a list.
+                # Not applicable to tables, whose default value is a list
+                if ("default" in arginfo[k][0] and isinstance(arginfo[k][0]["default"], list) 
+                                                and arginfo[k][0]["ty"] != "TableValue"):
+                    arginfo[k][0]["default"].insert(0, v)
+                else:
+                    arginfo[k][0]["default"] = v
             else:
-                arginfo[k][0]["default"] = v
+                logger.warning("Argument %s is present in HDF5 file but not in current experiment", k)
         self.manager.initialize_submission_arguments(self.expurl, arginfo, ui_name)
 
         argeditor_state = self.argeditor.save_state()
@@ -650,6 +655,7 @@ class ExperimentManager:
             }
         self.submission_arguments[expurl] = arguments
         self.argument_ui_names[expurl] = ui_name
+        self.update_exparg()
         return arguments
 
     def set_argument_value(self, expurl, name, value):
@@ -678,6 +684,13 @@ class ExperimentManager:
             return self.initialize_submission_arguments(expurl, class_desc["arginfo"],
                                                         class_desc.get("argument_ui", None))
 
+    def delete_argument(self, expurl):
+        try:
+            del self.submission_arguments[expurl]
+        except Exception:
+            logger.warn("Failed to delete experiment arguments for : {}."
+                        .format(expurl), exc_info=1)
+
     def open_experiment(self, expurl):
         if expurl in self.open_experiments:
             dock = self.open_experiments[expurl]
@@ -687,7 +700,10 @@ class ExperimentManager:
             return dock
         try:
             dock = _ExperimentDock(self, expurl)
-        except:
+        except KeyError:
+            logger.warning("Failed to create experiment dock for %s.", expurl, exc_info=True)
+            return
+        except Exception:
             logger.warning("Failed to create experiment dock for %s, "
                            "attempting to reset arguments", expurl,
                            exc_info=True)
@@ -833,6 +849,7 @@ class ExperimentManager:
         self.colors.update(state.get("colors", {}))
         for expurl in state["open_docks"]:
             self.open_experiment(expurl)
+        self.update_exparg()
 
     def show_quick_open(self):
         if self.is_quick_open_shown:

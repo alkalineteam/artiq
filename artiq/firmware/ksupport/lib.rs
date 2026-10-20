@@ -14,16 +14,19 @@ extern crate board_misoc;
 extern crate board_artiq;
 extern crate proto_artiq;
 extern crate riscv;
+extern crate alloc_list;
+extern crate refcounting;
 
-use core::{mem, ptr, slice, str, convert::TryFrom};
+use core::{mem, ptr, slice, str, convert::TryFrom, alloc::Layout};
 use cslice::CSlice;
 use io::Cursor;
-use dyld::Library;
+use dyld::{Library, lookup_fn};
 use board_artiq::{mailbox, rpc_queue};
 use proto_artiq::{kernel_proto, rpc_proto};
 use kernel_proto::*;
 use board_misoc::csr;
 use riscv::register::{mcause, mepc, mtval};
+use refcounting::{List, RefCounted, RefAwareArray};
 
 fn send(request: &Message) {
     unsafe { mailbox::send(request as *const _ as usize) }
@@ -87,25 +90,26 @@ macro_rules! println {
 }
 
 macro_rules! raise {
-    ($name:expr, $message:expr, $param0:expr, $param1:expr, $param2:expr) => ({
-        use cslice::AsCSlice;
+    ($name:expr, $message:expr, $param0:expr, $param1:expr, $param2:expr) => {{
         let name_id = $crate::eh_artiq::get_exception_id($name);
         let exn = $crate::eh_artiq::Exception {
-            id:       name_id,
-            file:     file!().as_c_slice(),
-            line:     line!(),
-            column:   column!(),
+            id: name_id,
+            file: file!().into(),
+            line: line!(),
+            column: column!(),
             // https://github.com/rust-lang/rfcs/pull/1719
-            function: "(Rust function)".as_c_slice(),
-            message:  $message.as_c_slice(),
-            param:    [$param0, $param1, $param2]
+            function: "(Rust function)".into(),
+            message: $message.into(),
+            param: [$param0, $param1, $param2],
         };
         #[allow(unused_unsafe)]
-        unsafe { $crate::eh_artiq::raise(&exn) }
-    });
-    ($name:expr, $message:expr) => ({
+        unsafe {
+            $crate::eh_artiq::raise(&exn)
+        }
+    }};
+    ($name:expr, $message:expr) => {{
         raise!($name, $message, 0, 0, 0)
-    });
+    }};
 }
 
 mod eh_artiq;
@@ -115,6 +119,43 @@ mod nrt_bus;
 mod cxp;
 
 static mut LIBRARY: Option<Library<'static>> = None;
+static mut ALLOC: alloc_list::ListAlloc = alloc_list::EMPTY;
+
+extern "C" {
+    static __kernel_stack_start: usize;
+    static __kernel_heap_start: usize;
+    static __kernel_heap_end: usize;
+}
+
+fn heap_reset() {
+    unsafe {
+        ALLOC = alloc_list::EMPTY;
+        let start = &__kernel_heap_start as *const _ as *mut u8;
+        let end = &__kernel_heap_end as *const _ as *mut u8;
+        ALLOC.add_range(start, end);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn malloc(size: usize) -> *mut u8 {
+    let layout = match Layout::from_size_align(size, 8) {
+        Ok(l) => l,
+        Err(_) => raise!("MemoryError", "allocation size too large"),
+    };
+    let ptr = core::alloc::GlobalAlloc::alloc(&ALLOC, layout);
+    if ptr.is_null() {
+        raise!("MemoryError", "kernel CPU heap exhausted");
+    }
+    ptr
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn free(ptr: *mut u8) {
+    if ptr.is_null() { return; }
+    // ListAlloc::dealloc ignores the layout, so we pass a dummy.
+    let layout = Layout::from_size_align(1, 8).unwrap();
+    core::alloc::GlobalAlloc::dealloc(&ALLOC, ptr, layout);
+}
 
 #[no_mangle]
 pub extern fn send_to_core_log(text: CSlice<u8>) {
@@ -211,19 +252,35 @@ fn terminate(exceptions: &'static [Option<eh_artiq::Exception<'static>>],
     loop {}
 }
 
-extern fn cache_get<'a>(key: CSlice<u8>) -> *const CSlice<'a, i32> {
+extern fn cache_get(key: CSlice<u8>) -> *mut List<i32> {
     send(&CacheGetRequest {
-        key:   str::from_utf8(key.as_ref()).unwrap()
+        key: str::from_utf8(key.as_ref()).unwrap()
     });
-    recv!(&CacheGetReply { value } => {
-        value
+
+    recv!(&CacheGetReply { value, len } => {
+        unsafe {
+            let wrap = lookup_fn!(
+                b"__nac3_list_i32_wrap",
+                fn(
+                    *mut RefCounted<RefAwareArray<i32>>,
+                    usize,
+                    bool
+                ) -> *mut List<i32>
+            ).unwrap();
+            wrap(
+                value as *const _ as *mut _,
+                len as usize,
+                false
+            )
+        }
     })
 }
 
-extern "C-unwind" fn cache_put(key: CSlice<u8>, list: &CSlice<i32>) {
+extern "C-unwind" fn cache_put(key: CSlice<u8>, list: &List<i32>) {
     send(&CachePutRequest {
         key:   str::from_utf8(key.as_ref()).unwrap(),
-        value: list.as_ref()
+        value: list.get_backing_array(),
+        len:   list.inner.len
     });
     recv!(&CachePutReply { succeeded } => {
         if !succeeded {
@@ -345,13 +402,14 @@ extern fn dma_record_output(target: i32, word: i32) {
     }
 }
 
-extern fn dma_record_output_wide(target: i32, words: &CSlice<i32>) {
+extern fn dma_record_output_wide(target: i32, words: &refcounting::List<i32>) {
+    let words = words.as_slice();
     assert!(words.len() <= 16); // enforce the hardware limit
 
     unsafe {
         let timestamp = ((csr::rtio::now_hi_read() as i64) << 32) | (csr::rtio::now_lo_read() as i64);
         let mut data = dma_record_output_prepare(timestamp, target, words.len());
-        for word in words.as_ref().iter() {
+        for word in words.iter() {
             data[..4].copy_from_slice(&[
                 (word >>  0) as u8,
                 (word >>  8) as u8,
@@ -638,7 +696,7 @@ static mut STACK_GUARD_BASE: usize = 0x0;
 pub unsafe fn main() {
     eh_artiq::reset_exception_buffer(KERNELCPU_PAYLOAD_ADDRESS);
     let image = slice::from_raw_parts_mut(kernel_proto::KERNELCPU_PAYLOAD_ADDRESS as *mut u8,
-                                          kernel_proto::KERNELCPU_LAST_ADDRESS -
+                                          &__kernel_stack_start as *const _ as usize -
                                           kernel_proto::KERNELCPU_PAYLOAD_ADDRESS);
 
     let library = recv!(&LoadRequest(library) => {
@@ -672,6 +730,7 @@ pub unsafe fn main() {
     LIBRARY = Some(library);
 
     ptr::write_bytes(__bss_start as *mut u8, 0, (_end - __bss_start) as usize);
+    heap_reset();
 
     board_misoc::pmp::init_stack_guard(_sstack_guard as usize);
     STACK_GUARD_BASE = _sstack_guard as usize;

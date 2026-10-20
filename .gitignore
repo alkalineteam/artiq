@@ -16,7 +16,6 @@ __pycache__/
 /dist
 /*.egg-info
 /.coverage
-/artiq/test/lit/*/Output/
 /artiq/binaries
 /artiq/firmware/target/
 /misoc_*/
@@ -37,4 +36,4 @@ __pycache__/
 /device_db*.py
 /test*
 /lri.json
-/.vscode
+/.vscode/

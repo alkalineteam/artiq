@@ -182,6 +182,7 @@ dependencies = [
 name = "ksupport"
 version = "0.0.0"
 dependencies = [
+ "alloc_list",
  "board_artiq",
  "board_misoc",
  "build_misoc",
@@ -192,6 +193,7 @@ dependencies = [
  "io",
  "libc 0.1.0",
  "proto_artiq",
+ "refcounting",
  "riscv",
  "unwind",
 ]
@@ -266,6 +268,7 @@ dependencies = [
  "failure_derive",
  "io",
  "log",
+ "refcounting",
 ]
 
 [[package]]
@@ -273,6 +276,10 @@ name = "quote"
 version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a6e920b65c65f10b2ae65c831a81a073a89edd28c7cce89475bff467ab4167a"
+
+[[package]]
+name = "refcounting"
+version = "0.0.0"
 
 [[package]]
 name = "regex"
@@ -333,6 +340,7 @@ dependencies = [
  "logger_artiq",
  "managed 0.7.2",
  "proto_artiq",
+ "refcounting",
  "riscv",
  "smoltcp",
  "tar-no-std",
@@ -364,6 +372,7 @@ dependencies = [
  "log",
  "logger_artiq",
  "proto_artiq",
+ "refcounting",
  "riscv",
 ]
 

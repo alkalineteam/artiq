@@ -1,23 +1,26 @@
-import os
-import time
 import unittest
+
+from numpy import int32
 
 from artiq.experiment import *
 from artiq.test.hardware_testbench import ExperimentCase
+from artiq.coredevice.core import Core
 
-
+@compile
 class _Stress(EnvExperiment):
+    core: KernelInvariant[Core]
+
     def build(self):
         self.setattr_device("core")
 
     @rpc(flags={"async"})
-    def sink(self, data):
+    def sink(self, data: int32):
         pass
 
     @kernel
-    def async_rpc(self, n):
+    def async_rpc(self, n: int32):
         for _ in range(n):
-            self.sink(b"")
+            self.sink(0)
 
 
 class StressTest(ExperimentCase):
