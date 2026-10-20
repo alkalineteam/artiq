@@ -1,0 +1,42 @@
+{
+    "_description": "CASTOR_UoB master",
+    "target": "kasli",
+    "min_artiq_version": "10.0",
+    "variant": "castor_master",
+    "hw_rev": "v2.0",
+    "drtio_role": "master",
+    "core_addr": "192.168.1.70",
+    "sed_lanes": 16,
+    "peripherals": [
+        {
+            "type": "urukul",
+            "dds": "ad9910",
+            "ports": [1, 0],
+            "clk_sel": 2,
+            "proto_rev": 9
+        },
+        {
+            "type": "urukul",
+            "dds": "ad9910",
+            "ports": [2, 3],
+            "clk_sel": 2,
+            "proto_rev": 9
+        },
+        {
+            "type": "urukul",
+            "dds": "ad9910",
+            "ports": [4, 5],
+            "clk_sel": 2,
+            "proto_rev": 9
+        },
+        {
+            "type": "fastino",
+            "ports": [6],
+            "log2_width": 5
+        },
+        {
+            "type": "sampler",
+            "ports": [8, 9]
+        }
+    ]
+}

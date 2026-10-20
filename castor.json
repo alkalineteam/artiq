@@ -1,0 +1,79 @@
+{
+    "_description": "CASTOR_UoB",
+    "target": "kasli",
+    "min_artiq_version": "8.0",
+    "variant": "CASTOR",
+    "hw_rev": "v2.0",
+    "drtio_role": "master",
+    "core_addr": "192.168.1.70",
+    "sed_lanes": 16,
+    "peripherals": [
+        {
+            "type": "urukul",
+            "dds": "ad9910",
+            "ports": [1, 0],
+            "clk_sel": 2,
+            "proto_rev": 9
+        },
+        {
+            "type": "urukul",
+            "dds": "ad9910",
+            "ports": [2, 3],
+            "clk_sel": 2,
+            "proto_rev": 9
+        },
+        {
+            "type": "urukul",
+            "dds": "ad9910",
+            "ports": [4, 5],
+            "clk_sel": 2,
+            "proto_rev": 9
+        },
+        {
+            "type": "fastino",
+            "ports": [6, 7],
+            "log2_width": 5
+        },
+        {
+            "type": "sampler",
+            "ports": [8, 9]
+        }
+}
+{
+    "_description": "CASTOR_UoB",
+    "target": "kasli",
+    "min_artiq_version": "8.0",
+    "variant": "CASTOR",
+    "hw_rev": "v2.0",
+    "drtio_role": "satellite",
+    "core_addr": "192.168.1.70",
+    "sed_lanes": 16,
+    "peripherals": [
+        {
+            "type": "mirny",
+            "ports": [0],
+            "clk_sel": "mmcx"
+        },
+        {
+            "type": "mirny",
+            "ports": [1],
+            "clk_sel": "mmcx"
+        },
+        // There are two stabilizers on ports 2 and 3, but they are not used in the current configuration
+        {
+            "type": "dio",
+            "board": "DIO_SMA",
+            "ports": [4],
+            "bank_direction_low": "output",
+            "bank_direction_high": "output"
+        },
+        {
+            "type": "dio",
+            "board": "DIO_SMA",
+            "ports": [5],
+            "bank_direction_low": "output",
+            "bank_direction_high": "output"
+        },
+        
+    ]
+}

@@ -1,0 +1,37 @@
+{
+    "_description": "CASTOR_UoB satellite",
+    "target": "kasli",
+    "min_artiq_version": "10.0",
+    "variant": "castor_satellite",
+    "hw_rev": "v2.0",
+    "drtio_role": "satellite",
+    "sed_lanes": 16,
+    "peripherals": [
+        {
+            "type": "mirny",
+            "ports": [0],
+            "clk_sel": "mmcx",
+            "refclk": 125e6
+        },
+        {
+            "type": "mirny",
+            "ports": [1],
+            "clk_sel": "mmcx",
+            "refclk": 125e6
+        },
+        {
+            "type": "dio",
+            "board": "DIO_SMA",
+            "ports": [4],
+            "bank_direction_low": "output",
+            "bank_direction_high": "output"
+        },
+        {
+            "type": "dio",
+            "board": "DIO_SMA",
+            "ports": [5],
+            "bank_direction_low": "output",
+            "bank_direction_high": "output"
+        }
+    ]
+}
