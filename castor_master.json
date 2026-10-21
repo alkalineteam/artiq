@@ -11,32 +11,35 @@
         {
             "type": "urukul",
             "dds": "ad9910",
-            "ports": [1, 0],
+            "ports": [0, 1],
             "clk_sel": 2,
-            "proto_rev": 9
+            "proto_rev": 8
         },
         {
             "type": "urukul",
             "dds": "ad9910",
             "ports": [2, 3],
             "clk_sel": 2,
-            "proto_rev": 9
+            "proto_rev": 8
         },
         {
             "type": "urukul",
             "dds": "ad9910",
             "ports": [4, 5],
             "clk_sel": 2,
-            "proto_rev": 9
+            "proto_rev": 8
         },
         {
             "type": "fastino",
-            "ports": [6],
-            "log2_width": 5
+            "ports": [6]
         },
         {
             "type": "sampler",
             "ports": [8, 9]
+        },
+        {
+            "type": "sampler",
+            "ports": [10, 11]
         }
     ]
 }
