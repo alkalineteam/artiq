@@ -1,13 +1,3 @@
-"""Switch one Mirny RF output on and off: on for 500 ms, off for 500 ms,
-repeated 200 times (about 3 min 20 s). Uses the channel's RF switch, so the
-timing is set by RTIO, not by the PC.
-
-    artiq_run repository/mirny_toggle.py
-    artiq_run repository/mirny_toggle.py channel='"mirny1_ch2"' frequency=1500e6
-
-The output is left off at the end.
-"""
-
 from numpy import int32
 
 from artiq.experiment import *

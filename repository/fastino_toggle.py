@@ -1,16 +1,3 @@
-"""Step one Fastino DAC channel between two voltages: high for 500 ms, low for
-500 ms, repeated 200 times (about 3 min 20 s). The timing is set by RTIO, not
-by the PC.
-
-    artiq_run repository/fastino_toggle.py
-    artiq_run repository/fastino_toggle.py dac=5 high_voltage=2.0
-
-Voltages are Fastino outputs (-10 to +10 V). On CASTOR they go through the HV
-amplifier, which multiplies them by its gain (most likely 5x), so the default
-1 V shows up as about 5 V on the IDC-MCX adapter. The channel is left at
-low_voltage at the end.
-"""
-
 from numpy import int32
 
 from artiq.experiment import *

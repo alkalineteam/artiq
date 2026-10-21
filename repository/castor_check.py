@@ -1,28 +1,6 @@
-"""Health check for the CASTOR crate (DRTIO master + satellite).
+"""Health check for the CASTOR crate (DRTIO master & satellite).
 
-Goes through every device in the device DB one by one, prints PASS/FAIL for
-each, and ends with a summary. Run it from the directory holding the crate's
-device_db.py:
-
-    artiq_run repository/castor_check.py
-
-Checks that need no extra equipment (CPLD/chip responses, register readbacks,
-PLL lock) always run. Anything that changes a physical output is opt-in:
-
-    rf_test_outputs=True    leave test tones on (Urukul 10-33 MHz, Mirny
-                            1.1-1.23 GHz) for a scope / spectrum analyser
-    pulse_ttl_outputs=True  pulse every TTL output 3 times
-
-    artiq_run repository/castor_check.py rf_test_outputs=True
-
-Running this re-initialises every Urukul and Mirny and turns their RF
-switches off, so don't run it while an experiment needs stable RF. Fastino
-voltages are never changed, because the HV amplifier is driven from it.
-
-Status words: PASS = verified by readback, FAIL = error or wrong readback,
-LOOK = commands sent but only your eyes can confirm (LEDs), SKIP = not tested.
 """
-
 import re
 import time
 

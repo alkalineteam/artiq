@@ -1,14 +1,3 @@
-"""Switch one Urukul AD9910 RF output on and off: on for 1 s, off for 1 s,
-repeated 500 times (about 17 min). Uses the channel's RF switch, so the
-timing is set by RTIO, not by the PC.
-
-    artiq_run repository/ad9910_toggle.py
-    artiq_run repository/ad9910_toggle.py channel='"urukul1_ch2"' frequency=80e6
-
-Defaults are the BMOT AOM (urukul0_ch0, 90 MHz, 0 dB). 0 dB attenuation is
-the Urukul's full output power. The output is left off at the end.
-"""
-
 from numpy import int32
 
 from artiq.experiment import *
