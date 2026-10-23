@@ -93,6 +93,14 @@ fn grabber_uart_worker(io: sched::Io) {
     }
 }
 
+#[cfg(has_eem_power_control)]
+fn eem_power_monitor_thread(io: sched::Io) {
+    loop {
+        board_artiq::eem_power_monitor::tick();
+        io.sleep(200).unwrap();
+    }
+}
+
 fn setup_log_levels() {
     match config::read_str("log_level", |r| r.map(|s| s.parse())) {
         Ok(Ok(log_level_filter)) => {
@@ -145,6 +153,14 @@ fn startup() {
         io_expander1.service().unwrap();
     }
     rtio_clocking::init();
+
+    #[cfg(has_eem_power_control)]
+    {
+        unsafe {
+            csr::eem_power_control::sw_power_en_write(1);
+        }
+        info!("EEM power enabled");
+    }
 
     #[cfg(has_drtio_eem)]
     drtio_eem::init();
@@ -258,6 +274,9 @@ fn startup() {
 
     #[cfg(has_grabber)]
     io.spawn(4096, grabber_uart_worker);
+
+    #[cfg(has_eem_power_control)]
+    io.spawn(4096, eem_power_monitor_thread);
 
     let mut net_stats = ethmac::EthernetStatistics::new();
     loop {
