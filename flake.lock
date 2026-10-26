@@ -70,11 +70,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1791812580,
-        "narHash": "sha256-9H2ORRv8QKTmUqVgfNInKDZYN6iTVwqZmYhsE9cygo8=",
+        "lastModified": 1792679116,
+        "narHash": "sha256-gHcgi4gIYhptBfF2Ia67pw1aD/m2dXtCXGf5BJmb42M=",
         "ref": "refs/heads/master",
-        "rev": "19474e5adc0796711c50b7deeaff394589471d45",
-        "revCount": 2487,
+        "rev": "d723b1e1236981bec8656159eef47cb357d8a9d4",
+        "revCount": 2490,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/nac3.git"
       },
@@ -92,11 +92,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1782220280,
-        "narHash": "sha256-thLTFbp9D5Qknmh8q/v4FRpLGphUSijT3E86cbLYTXo=",
+        "lastModified": 1792096940,
+        "narHash": "sha256-75jRkpI2iya4fd/FPOyE9+BuiAp/2sV/hYtwrj6IyME=",
         "owner": "nix-community",
         "repo": "naersk",
-        "rev": "9aa07bb0256d300219b30622d2454e85f7f3667e",
+        "rev": "5c7912af5141e323ff0bd25c95bd6d3b889b8c53",
         "type": "github"
       },
       "original": {
@@ -107,12 +107,12 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1790578696,
-        "narHash": "sha256-ZoxIApko70jCdbH3l20HWXOBaT2HZd87orzd2yJ9dVE=",
-        "rev": "7a0f122f5090cf4c2ade2a13a0e229d4e19ba71f",
-        "revCount": 1080855,
+        "lastModified": 1791734076,
+        "narHash": "sha256-i5qk1kLiit98rRbh1AXmWBNT9QXC/y4l5Wk/u5EdpDQ=",
+        "rev": "7fd4004d0511991fff3a0524856a9be09e28c5f0",
+        "revCount": 1090327,
         "type": "tarball",
-        "url": "https://api.flakehub.com/f/pinned/DeterminateSystems/nixpkgs-weekly/0.1.1080855%2Brev-7a0f122f5090cf4c2ade2a13a0e229d4e19ba71f/01a10fba-020b-7731-ab22-ae4ea069e18f/source.tar.gz"
+        "url": "https://api.flakehub.com/f/pinned/DeterminateSystems/nixpkgs-weekly/0.1.1090327%2Brev-7fd4004d0511991fff3a0524856a9be09e28c5f0/01a157d3-12a4-7a20-aeab-772b0493858f/source.tar.gz"
       },
       "original": {
         "type": "tarball",
@@ -193,11 +193,11 @@
     "src-migen": {
       "flake": false,
       "locked": {
-        "lastModified": 1789608323,
-        "narHash": "sha256-UTWFbGi3XHczfoCKTlFYJFy95ypDGPUKA9XA8mIOdp4=",
+        "lastModified": 1791912530,
+        "narHash": "sha256-aVGzcwgcXutB9ZGiyO3v9Dmnayh+wWR9N58reOLXIf0=",
         "ref": "refs/heads/master",
-        "rev": "beffe831bf1a691eaebf9ddbb4660f8b3e7fd964",
-        "revCount": 2084,
+        "rev": "b38dca718fc72c52a3e91116d3eaac138b16b657",
+        "revCount": 2085,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/migen.git"
       },

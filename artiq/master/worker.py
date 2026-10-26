@@ -124,6 +124,8 @@ class Worker:
                 await self._send({"action": "terminate"}, cancellable=False)
                 await asyncio.wait_for(self.ipc.process.wait(), term_timeout)
                 logger.debug("worker exited on request (RID %s)", self.rid)
+                await self.log_stdout_task
+                await self.log_stderr_task
                 return
             except:
                 logger.debug("worker failed to exit on request"
@@ -138,6 +140,8 @@ class Worker:
                     await asyncio.wait_for(self.ipc.process.wait(),
                                            term_timeout)
                     logger.debug("worker terminated (RID %s)", self.rid)
+                    await self.log_stdout_task
+                    await self.log_stderr_task
                     return
                 except asyncio.TimeoutError:
                     logger.warning(
@@ -149,6 +153,8 @@ class Worker:
             try:
                 await asyncio.wait_for(self.ipc.process.wait(), term_timeout)
                 logger.debug("worker killed (RID %s)", self.rid)
+                await self.log_stdout_task
+                await self.log_stderr_task
                 return
             except asyncio.TimeoutError:
                 logger.warning("worker refuses to die (RID %s)", self.rid)
