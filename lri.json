@@ -2,10 +2,9 @@
     "_description": "long_range_interaction_uob",
     "target": "kasli",
     "variant": "lri",
-    "min_artiq_version": "9.0",
+    "min_artiq_version": "10.0",
     "hw_rev": "v2.0",
     "drtio_role": "standalone",
-    "ext_ref_frequency": 10e6,
     "core_addr": "192.168.1.80",
     "sed_lanes": 16,
     "peripherals": [
