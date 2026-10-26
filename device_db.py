@@ -45,7 +45,7 @@ device_db = {
         "module": "artiq.coredevice.dma",
         "class": "CoreDMA"
     },
-    
+
     "i2c_switch0": {
         "type": "local",
         "module": "artiq.coredevice.i2c",
@@ -125,7 +125,7 @@ device_db["urukul0_cpld"] = {
         "refclk": 125000000.0,
         "clk_sel": 2,
         "clk_div": 0,
-        "proto_rev": 8
+        "proto_rev": 9
     }
 }
 
@@ -355,7 +355,7 @@ device_db["urukul2_cpld"] = {
         "refclk": 125000000.0,
         "clk_sel": 2,
         "clk_div": 0,
-        "proto_rev": 8
+        "proto_rev": 9
     }
 }
 
