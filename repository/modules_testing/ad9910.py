@@ -1,45 +1,57 @@
 from artiq.experiment import *
-from numpy import int64, int32
 from artiq.coredevice.core import Core
+from artiq.coredevice.ad9910 import AD9910
 
-class AD9910(EnvExperiment):
+
+@compile
+class AD9910Test(EnvExperiment):
+    core: KernelInvariant[Core]
+    dds: KernelInvariant[AD9910[Auto]]
+    Enable_RF: KernelInvariant[bool]
+    Frequency: KernelInvariant[float]
+    Attenuation: KernelInvariant[float]
+
     def build(self):
         self.setattr_device("core")
-        self.core:Core
-        self.ad9910_0=self.get_device("urukul0_ch0") 
-
+        channels = [name for name, desc in self.get_device_db().items()
+                    if isinstance(desc, dict) and desc.get("class") == "AD9910"]
+        self.setattr_argument("channel", EnumerationValue(channels, "urukul0_ch0"))
         self.setattr_argument("Enable_RF", BooleanValue(default=False))
-        self.setattr_argument("Frequency", NumberValue(default=350.0, unit="MHz"))
-        self.setattr_argument("Attenuation", NumberValue(default=11.8, unit="dB"))
+        self.setattr_argument("Frequency", NumberValue(default=350*MHz, unit="MHz", min=0., max=400*MHz))
+        self.setattr_argument("Attenuation", NumberValue(default=11.8, unit="dB", min=0., max=31.5))
+        self.dds = self.get_device(self.channel)
 
     @kernel
     def run(self):
         self.core.reset()
         self.core.break_realtime()
 
-        self.ad9910_0.sw.on()
+        self.dds.cpld.init()
+        self.dds.init()
+        # init() reads back from the chip and waits for PLL lock, so get fresh
+        # slack before the next output (otherwise RTIOUnderflow)
+        self.core.break_realtime()
 
-        self.ad9910_0.cpld.init()
-        self.ad9910_0.init()
-        
-        self.ad9910_0.set_att(self.Attenuation)    #limit  : -31.5
-        self.ad9910_0.set(frequency=self.Frequency * MHz)
+        self.dds.set_att(self.Attenuation)    # 0 to 31.5 dB
+        self.dds.set(frequency=self.Frequency)
 
         if self.Enable_RF:
-            self.ad9910_0.sw.on()
+            self.dds.sw.unwrap().on()
         else:
-            self.ad9910_0.sw.off()
+            self.dds.sw.unwrap().off()
 
         # for i in range(10):
-        #     self.ad9910_0.sw.on()
-        #     delay(1000*ms)
-        #     self.ad9910_0.sw.off()
-        #     delay(1000*ms)
+        #     self.dds.sw.unwrap().on()
+        #     self.core.delay(1000.*ms)
+        #     self.dds.sw.unwrap().off()
+        #     self.core.delay(1000.*ms)
 
         # for i in range(10):
-        #     self.ad9910_0.set(frequency=39 * MHz, amplitude=1.0)
-        #     delay(1000*ms)
-        #     self.ad9910_0.set(frequency=41 * MHz, amplitude=1.0)
-        #     delay(1000*ms)
+        #     self.dds.set(frequency=39.*MHz, amplitude=1.0)
+        #     self.core.delay(1000.*ms)
+        #     self.dds.set(frequency=41.*MHz, amplitude=1.0)
+        #     self.core.delay(1000.*ms)
 
-        print("AD9910 test is done!")
+        # Wait until the switch has actually changed before reporting
+        self.core.wait_until_mu(now_mu())
+        print_rpc("AD9910 test is done!")
