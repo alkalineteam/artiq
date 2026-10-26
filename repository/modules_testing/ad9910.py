@@ -9,7 +9,7 @@ class AD9910Test(EnvExperiment):
     dds: KernelInvariant[AD9910[Auto]]
     Enable_RF: KernelInvariant[bool]
     Frequency: KernelInvariant[float]
-    Attenuation: KernelInvariant[float]
+    Amplitude: KernelInvariant[float]
 
     def build(self):
         self.setattr_device("core")
@@ -17,8 +17,8 @@ class AD9910Test(EnvExperiment):
                     if isinstance(desc, dict) and desc.get("class") == "AD9910"]
         self.setattr_argument("channel", EnumerationValue(channels, "urukul0_ch0"))
         self.setattr_argument("Enable_RF", BooleanValue(default=False))
-        self.setattr_argument("Frequency", NumberValue(default=350*MHz, unit="MHz", min=0., max=400*MHz))
-        self.setattr_argument("Attenuation", NumberValue(default=11.8, unit="dB", min=0., max=31.5))
+        self.setattr_argument("Frequency", NumberValue(default=90*MHz, unit="MHz", min=0., max=400*MHz))
+        self.setattr_argument("Amplitude", NumberValue(default=0.0, min=0., max=1.0))
         self.dds = self.get_device(self.channel)
 
     @kernel
@@ -28,12 +28,11 @@ class AD9910Test(EnvExperiment):
 
         self.dds.cpld.init()
         self.dds.init()
-        # init() reads back from the chip and waits for PLL lock, so get fresh
-        # slack before the next output (otherwise RTIOUnderflow)
+
         self.core.break_realtime()
 
-        self.dds.set_att(self.Attenuation)    # 0 to 31.5 dB
-        self.dds.set(frequency=self.Frequency)
+        self.dds.set_att(0.0)    # 0 to 31.5 dB
+        self.dds.set(frequency=self.Frequency, amplitude=self.Amplitude)  # 0 to 1.0
 
         if self.Enable_RF:
             self.dds.sw.unwrap().on()
@@ -52,6 +51,6 @@ class AD9910Test(EnvExperiment):
         #     self.dds.set(frequency=41.*MHz, amplitude=1.0)
         #     self.core.delay(1000.*ms)
 
-        # Wait until the switch has actually changed before reporting
+
         self.core.wait_until_mu(now_mu())
         print_rpc("AD9910 test is done!")
