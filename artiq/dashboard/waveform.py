@@ -771,26 +771,8 @@ class WaveformDock(QtWidgets.QDockWidget):
         self._menu_btn = QtWidgets.QPushButton()
         self._menu_btn.setIcon(
             QtWidgets.QApplication.style().standardIcon(
-                QtWidgets.QStyle.StandardPixmap.SP_FileDialogStart))
+                QtWidgets.QStyle.StandardPixmap.SP_DirOpenIcon))
         grid.addWidget(self._menu_btn, 0, 0)
-
-        self._request_dump_btn = QtWidgets.QToolButton()
-        self._request_dump_btn.setToolTip("Fetch analyzer data from device")
-        self._request_dump_btn.setIcon(
-            QtWidgets.QApplication.style().standardIcon(
-                QtWidgets.QStyle.StandardPixmap.SP_BrowserReload))
-        self._request_dump_btn.clicked.connect(
-            lambda: asyncio.ensure_future(exc_to_warning(self.proxy_client.trigger_proxy_task())))
-        grid.addWidget(self._request_dump_btn, 0, 1)
-
-        self._uniform_interval_button = QtWidgets.QToolButton()
-        self._uniform_interval_button.setIcon(
-            QtWidgets.QApplication.style().standardIcon(
-                QtWidgets.QStyle.StandardPixmap.SP_ToolBarHorizontalExtensionButton))
-        self._uniform_interval_button.setToolTip("Display waveforms with uniform time intervals")
-        self._uniform_interval_button.setCheckable(True)
-        self._uniform_interval_button.clicked.connect(self._update_uniform_interval)
-        grid.addWidget(self._uniform_interval_button, 0, 2)
 
         self._add_channel_dialog = _AddChannelDialog(self, self._channel_model)
         self._add_channel_dialog.accepted.connect(self._add_channels)
@@ -801,7 +783,25 @@ class WaveformDock(QtWidgets.QDockWidget):
             QtWidgets.QApplication.style().standardIcon(
                 QtWidgets.QStyle.StandardPixmap.SP_FileDialogListView))
         self._add_btn.clicked.connect(self._add_channel_dialog.open)
-        grid.addWidget(self._add_btn, 0, 3)
+        grid.addWidget(self._add_btn, 0, 1)
+
+        self._request_dump_btn = QtWidgets.QToolButton()
+        self._request_dump_btn.setToolTip("Fetch analyzer data from device")
+        self._request_dump_btn.setIcon(
+            QtWidgets.QApplication.style().standardIcon(
+                QtWidgets.QStyle.StandardPixmap.SP_BrowserReload))
+        self._request_dump_btn.clicked.connect(
+            lambda: asyncio.ensure_future(exc_to_warning(self.proxy_client.trigger_proxy_task())))
+        grid.addWidget(self._request_dump_btn, 0, 2)
+
+        self._uniform_interval_button = QtWidgets.QToolButton()
+        self._uniform_interval_button.setIcon(
+            QtWidgets.QApplication.style().standardIcon(
+                QtWidgets.QStyle.StandardPixmap.SP_ToolBarHorizontalExtensionButton))
+        self._uniform_interval_button.setToolTip("Display waveforms with uniform time intervals")
+        self._uniform_interval_button.setCheckable(True)
+        self._uniform_interval_button.clicked.connect(self._update_uniform_interval)
+        grid.addWidget(self._uniform_interval_button, 0, 3)
 
         self._file_menu = QtWidgets.QMenu()
         self._add_async_action("Open trace...", self.load_trace)
