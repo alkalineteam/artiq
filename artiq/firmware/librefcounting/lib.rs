@@ -78,7 +78,7 @@ impl<T> List<T> {
         unsafe { (*self.inner.items).inner.as_mut_slice(self.inner.len as usize) }
     }
 
-    pub fn get_backing_array(&self) -> &RefCounted<RefAwareArray<T>> {
-        unsafe { &*self.inner.items }
+    pub fn get_backing_array(&self) -> Option<&RefCounted<RefAwareArray<T>>> {
+        unsafe { self.inner.items.as_ref() }
     }
 }
