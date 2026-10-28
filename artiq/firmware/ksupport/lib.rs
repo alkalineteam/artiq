@@ -267,20 +267,21 @@ extern fn cache_get(key: CSlice<u8>) -> *mut List<i32> {
                     bool
                 ) -> *mut List<i32>
             ).unwrap();
-            wrap(
-                value as *const _ as *mut _,
-                len as usize,
-                false
-            )
+            let value = if len == 0 {
+                core::ptr::null_mut()
+            } else {
+                value as *const _ as *mut _
+            };
+            wrap(value, len as usize, false)
         }
     })
 }
 
 extern "C-unwind" fn cache_put(key: CSlice<u8>, list: &List<i32>) {
     send(&CachePutRequest {
-        key:   str::from_utf8(key.as_ref()).unwrap(),
-        value: list.get_backing_array(),
-        len:   list.inner.len
+        key: str::from_utf8(key.as_ref()).unwrap(),
+        value: list.get_backing_array().unwrap_or(&RefCounted::<i32>::empty_array()),
+        len: list.inner.len,
     });
     recv!(&CachePutReply { succeeded } => {
         if !succeeded {
