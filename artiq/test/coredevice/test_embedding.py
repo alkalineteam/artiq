@@ -8,6 +8,7 @@ from numpy import int32, int64, ndarray
 from artiq.experiment import *
 from artiq.test.hardware_testbench import ExperimentCase
 from artiq.coredevice.comm_kernel import RPCReturnValueError
+from artiq.coredevice.comm_mgmt import CommMgmt
 from artiq.coredevice.core import Core
 
 
@@ -179,22 +180,25 @@ class _RPCTypes(EnvExperiment):
         core_log(self.return_array())
         core_log(self.return_matrix())
 
-    def accept(self, value):
+    @rpc
+    def accept(self, value: Auto):
         pass
 
-    # NAC3TODO @kernel
+    @kernel
     def run_send(self):
         self.accept(True)
         self.accept(1)
-        self.accept(0x100000000)
+        self.accept(int64(0x100000000))
         self.accept(1.0)
         self.accept("foo")
         self.accept((2, 3))
         self.accept([1, 2])
-        self.accept(range(10))
+        # NAC3TODO
+        # self.accept(range(10))
         self.accept(numpy.array([1, 2]))
         self.accept(numpy.array([[1, 2], [3, 4]]))
-        self.accept(self)
+        # NAC3TODO
+        # self.accept(self)
 
     @kernel
     def run_mismatch(self):
@@ -207,8 +211,35 @@ class RPCTypesTest(ExperimentCase):
         exp.run_send()
 
     def test_recv(self):
-        exp = self.create(_RPCTypes)
-        exp.run_send()
+        core_addr = self.device_mgr.get_desc("core")["arguments"]["host"]
+        mgmt = CommMgmt(core_addr)
+        mgmt.open()
+        try:
+            mgmt.clear_log()
+            exp = self.create(_RPCTypes)
+            exp.run_recv()
+            log = mgmt.get_log()
+            lines = [ line.split("):", 1)[1].strip() for line in log.splitlines() ]
+            # ordered, copied from log output
+            values = [
+                "True", "1", "4294967296",
+                ("1.00000", "1.000000"), # HACK: floating point precision differs between targets
+                "foo",
+                "(1, 2)", "[2, 3]",
+                "array([1, 2])", "array([array([1, 2]), array([3, 4])])"
+            ]
+
+            curr_line_no = 0
+            for exp_lines in values:
+                remaining_lines = lines[curr_line_no:]
+                for line in remaining_lines:
+                    curr_line_no += 1
+                    if line in exp_lines:
+                        break
+                else:
+                    raise ValueError("Missing line from log: {}".format(exp_lines))
+        finally:
+            mgmt.close()
 
     def test_mismatch(self):
         exp = self.create(_RPCTypes)
