@@ -125,6 +125,8 @@ class Core:
                 "np_array": np.array,
                 "np_eye": np.eye,
                 "np_identity": np.identity,
+                "np_arange": np.arange,
+                "np_linspace": np.linspace,
 
                 "np_size": np.size,
                 "np_shape": np.shape,
