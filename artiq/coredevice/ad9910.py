@@ -185,7 +185,7 @@ class AD9910(Generic[SyncDataT]):
         else:
             self.sw = none
         clk = self.cpld.refclk / [4, 1, 2, 4][self.cpld.clk_div]
-        self.pll_en = bool(pll_en)
+        self.pll_en = pll_en
         self.pll_vco = pll_vco
         self.pll_cp = pll_cp
         if pll_en:
