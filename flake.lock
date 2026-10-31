@@ -70,11 +70,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1793178134,
-        "narHash": "sha256-IGjHen8CxJDobgA6bN64002IcquIIQq2Jg+wN9XAMeM=",
+        "lastModified": 1793351870,
+        "narHash": "sha256-U0QTAptBF+P7L/6ZkdjgyLKiZeWVrUcGjHejrysVs/I=",
         "ref": "refs/heads/master",
-        "rev": "9e8e3a579ac49e19b5335c3ef9bff2d360b217b2",
-        "revCount": 2493,
+        "rev": "49d028b7aefdaa81917e214e09a73ab8ffbfbeef",
+        "revCount": 2517,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/nac3.git"
       },
@@ -107,12 +107,12 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1791734076,
-        "narHash": "sha256-i5qk1kLiit98rRbh1AXmWBNT9QXC/y4l5Wk/u5EdpDQ=",
-        "rev": "7fd4004d0511991fff3a0524856a9be09e28c5f0",
-        "revCount": 1090327,
+        "lastModified": 1792094642,
+        "narHash": "sha256-zp8ToDMnqZcu4o4IH9pdwXFXGp7yLm/M0dEnNWnyd7I=",
+        "rev": "fe13242281a67641c0102cdb1087f0ebe586c7df",
+        "revCount": 1093333,
         "type": "tarball",
-        "url": "https://api.flakehub.com/f/pinned/DeterminateSystems/nixpkgs-weekly/0.1.1090327%2Brev-7fd4004d0511991fff3a0524856a9be09e28c5f0/01a157d3-12a4-7a20-aeab-772b0493858f/source.tar.gz"
+        "url": "https://api.flakehub.com/f/pinned/DeterminateSystems/nixpkgs-weekly/0.1.1093333%2Brev-fe13242281a67641c0102cdb1087f0ebe586c7df/01a17be0-367b-7ae0-8515-6906d89d2794/source.tar.gz"
       },
       "original": {
         "type": "tarball",
@@ -209,11 +209,11 @@
     "src-misoc": {
       "flake": false,
       "locked": {
-        "lastModified": 1790917608,
-        "narHash": "sha256-1sbzg6q69D2Y/Vd2swAWPP14ftLAXIw54Mp6SqaxAQE=",
+        "lastModified": 1793436332,
+        "narHash": "sha256-EUJXmViCxcsavMg7oLmT3KrX86iSzfi7rjN/jWgNdpI=",
         "ref": "refs/heads/master",
-        "rev": "8a909c8b638fbec584048d6929d0c577f6be182d",
-        "revCount": 2531,
+        "rev": "756babe8c65b1527de78de0263804659dadd5aea",
+        "revCount": 2532,
         "submodules": true,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/misoc.git"
