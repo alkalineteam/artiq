@@ -209,11 +209,11 @@
     "src-misoc": {
       "flake": false,
       "locked": {
-        "lastModified": 1793436332,
-        "narHash": "sha256-EUJXmViCxcsavMg7oLmT3KrX86iSzfi7rjN/jWgNdpI=",
+        "lastModified": 1793605363,
+        "narHash": "sha256-iomlYRoCpy1DvAcIDN4hmcxoaZMJpPeOaUydKNm7S6w=",
         "ref": "refs/heads/master",
-        "rev": "756babe8c65b1527de78de0263804659dadd5aea",
-        "revCount": 2532,
+        "rev": "b41f41aa1e30cc78a90e97535e84c3b77ebad770",
+        "revCount": 2533,
         "submodules": true,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/misoc.git"
