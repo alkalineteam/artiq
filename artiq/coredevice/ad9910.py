@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Generic, TypeVar
 from numpy import int32, int64, uint32
 
 from artiq.language.core import *
@@ -113,11 +112,8 @@ class SyncDataEeprom:
         self.io_update_delay = int32(io_update_delay)
 
 
-SyncDataT = TypeVar("SyncDataT", SyncDataUser, SyncDataEeprom)
-
-
 @compile
-class AD9910(Generic[SyncDataT]):
+class AD9910:
     """
     AD9910 DDS channel on Urukul.
 
@@ -164,7 +160,7 @@ class AD9910(Generic[SyncDataT]):
     sysclk_per_mu: KernelInvariant[int32]
     sysclk: KernelInvariant[float]
     sw: KernelInvariant[Option[TTLOut]]
-    sync_data: KernelInvariant[SyncDataT]
+    sync_data: KernelInvariant[Auto]
     io_update: Kernel[urukul.IOUpdate]
     phase_mode: Kernel[int32]
 

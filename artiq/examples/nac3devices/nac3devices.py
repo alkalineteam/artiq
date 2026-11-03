@@ -33,7 +33,7 @@ class NAC3Devices(EnvExperiment):
     eeprom_urukul0: KernelInvariant[KasliEEPROM]
     urukul0_ch0: KernelInvariant[AD9912]
     urukul1_cpld: KernelInvariant[UrukulCPLD[ProtoRev9]]
-    urukul1_ch0: KernelInvariant[AD9910[AD9910Sync]]
+    urukul1_ch0: KernelInvariant[AD9910]
     sampler0: KernelInvariant[Sampler]
     suservo0: Kernel[suservo.SUServo[Auto]]
     suservo0_ch0: KernelInvariant[suservo.Channel[Auto]]
