@@ -16,8 +16,7 @@ class DMABlink(EnvExperiment):
 
     @kernel
     def record(self):
-        self.core_dma.prepare_record("blink")
-        with self.core_dma.recorder:
+        with self.core_dma.record("blink"):
             for i in range(5):
                 self.led.pulse(100.*ms)
                 self.core.delay(100.*ms)

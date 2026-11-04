@@ -36,7 +36,7 @@ def dma_playback(timestamp: int64, ptr: int32, enable_ddma: bool):
 
 @compile
 class DMARecordContextManager:
-    """Context manager returned by :meth:`CoreDMA.prepare_record()`.
+    """Context manager returned by :meth:`CoreDMA.record()`.
 
     Upon entering, starts recording a DMA trace. All RTIO operations are
     redirected to a newly created DMA buffer after this call, and ``now``
@@ -84,8 +84,8 @@ class CoreDMA:
         self.epoch    = 0
 
     @kernel
-    def prepare_record(self, name: str, enable_ddma: bool = False):
-        """Prepares a context manager that will record a DMA trace called `name`.
+    def record(self, name: str, enable_ddma: bool = False) -> DMARecordContextManager:
+        """Returns a context manager that will record a DMA trace called `name`.
         Any previously recorded trace with the same name is overwritten.
         The trace will persist across kernel switches.
         The context manager must be called separately, using `with core_dma.recorder`.
@@ -99,9 +99,7 @@ class CoreDMA:
         self.epoch += 1
         self.recorder.name = name
         self.recorder.enable_ddma = enable_ddma
-        # NAC3: return value [...] must be a primitive or a tuple of primitives
-        # call the recorder separately
-        # return self.recorder
+        return self.recorder
 
     @kernel
     def erase(self, name: str):
@@ -120,7 +118,7 @@ class CoreDMA:
     @kernel
     def get_handle(self, name: str) -> tuple[int32, int64, int32, bool]:
         """Returns a handle to a previously recorded DMA trace. The returned handle
-        is only valid until the next call to :meth:`prepare_record` or :meth:`erase`."""
+        is only valid until the next call to :meth:`record` or :meth:`erase`."""
         (advance_mu, ptr, uses_ddma) = dma_retrieve(name)
         return (self.epoch, advance_mu, ptr, uses_ddma)
 
