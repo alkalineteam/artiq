@@ -121,21 +121,27 @@ Subkernels begin execution as soon as possible when called. By default, they are
 
 For example, a subkernel performing integer addition: ::
 
+    from numpy import int32
+
     from artiq.experiment import *
+    from artiq.coredevice.core import Core
 
 
     @subkernel(destination=1)
-    def subkernel_add(a: TInt32, b: TInt32) -> TInt32:
+    def subkernel_add(a: int32, b: int32) -> int32:
         return a + b
 
+    @compile
     class SubkernelExperiment(EnvExperiment):
+        core: KernelInvariant[Core]
+
         def build(self):
             self.setattr_device("core")
 
         @kernel
         def run(self):
             subkernel_add(2, 2)
-            result = subkernel_await(subkernel_add)
+            result: int32 = subkernel_await(subkernel_add)
             assert result == 4
 
 Subkernels are compiled after the main kernel and immediately sent to the designated satellite. When they are called, the master simply instructs the subkernel to load and run the corresponding kernel. When ``self`` is used in subkernels, it is embedded into the compiled and uploaded data; this is the reason why changes made do not propagate between kernels.
@@ -159,22 +165,30 @@ Calling other kernels
 
 Subkernels can call other kernels and subkernels. For a more complex example: ::
 
-    from artiq.experiment import *
+    from numpy import int32
 
+    from artiq.experiment import *
+    from artiq.coredevice.core import Core
+
+    @compile
     class SubkernelExperiment(EnvExperiment):
+        core: KernelInvariant[Core]
+        ttl0: KernelInvariant[TTLOut]
+        ttl8: KernelInvariant[TTLOut]
+        
         def build(self):
             self.setattr_device("core")
             self.setattr_device("ttl0")
             self.setattr_device("ttl8")  # assuming it's on satellite
 
         @subkernel(destination=1)
-        def add_and_pulse(self, a: TInt32, b: TInt32) -> TInt32:
+        def add_and_pulse(self, a: int32, b: int32) -> int32:
             c = a + b
             self.pulse_ttl(c)
             return c
 
         @subkernel(destination=1)
-        def pulse_ttl(self, delay: TInt32) -> TNone:
+        def pulse_ttl(self, delay: int32):
             self.ttl8.pulse(delay*us)
 
         @kernel
@@ -184,7 +198,7 @@ Subkernels can call other kernels and subkernels. For a more complex example: ::
             delay(10*ms)
             self.add_and_pulse(2, 2)
             self.ttl0.pulse(15*us)
-            result = subkernel_await(self.add_and_pulse)
+            result: int32 = subkernel_await(self.add_and_pulse)
             assert result == 4
             self.pulse_ttl(20)
 
@@ -198,26 +212,32 @@ Message passing
 
 Apart from arguments and returns, subkernels can also pass messages between each other or the master with built-in ``subkernel_send()`` and ``subkernel_recv()`` functions. This can be used for communication between subkernels, to pass additional data, or to send partially computed data. Consider the following example: ::
 
+    from numpy import int32
+
     from artiq.experiment import *
+    from artiq.coredevice.core import Core
 
     @subkernel(destination=1)
-    def simple_message() -> TInt32:
-        data = subkernel_recv("message", TInt32)
+    def simple_message() -> int32:
+        data: int32 = subkernel_recv("channel")
         return data + 20
 
+    @compile
     class MessagePassing(EnvExperiment):
+        core: KernelInvariant[Core]
+
         def build(self):
             self.setattr_device("core")
 
         @kernel
         def run(self):
             simple_self()
-            subkernel_send(1, "message", 150)
-            result = subkernel_await(simple_self)
+            subkernel_send(1, "channel", 150)
+            result: int32 = subkernel_await(simple_self)
             assert result == 170
 
 The ``subkernel_send(destination, name, value)`` function requires three arguments: a destination, a name for the message (to be used for identification in the corresponding ``subkernel_recv()``), and the passed value.
 
-The ``subkernel_recv(name, type, [timeout])`` function requires two arguments: message name (matching exactly the name provided in ``subkernel_send``) and expected type. Optionally, it also accepts a third argument, a timeout for the operation in milliseconds. As with ``subkernel_await``, the default behavior is to wait as long as necessary, and a negative argument is ignored.
+The ``subkernel_recv(name, [timeout])`` function requires a message name (matching exactly the name provided in ``subkernel_send``). Optionally, it also accepts a second argument, a timeout for the operation in milliseconds. As with ``subkernel_await``, the default behavior is to wait as long as necessary, and a negative argument is ignored.
 
 A message can only be received while a subkernel is running, and is placed into a buffer to be retrieved when required. As a result ``send`` executes independently of any receive and never deadlocks. However, a ``receive`` function may timeout or lock (wait forever) if no message with the correct name and destination is ever sent.
