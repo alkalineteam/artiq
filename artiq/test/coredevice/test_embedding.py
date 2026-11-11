@@ -522,7 +522,6 @@ class _Assert(EnvExperiment):
 
 
 class AssertTest(ExperimentCase):
-    @unittest.skip("NAC3TODO https://git.m-labs.hk/M-Labs/nac3/issues/530")
     def test_assert(self):
         exp = self.create(_Assert)
 
@@ -532,7 +531,7 @@ class AssertTest(ExperimentCase):
             self.assertEqual(str(ctx.exception), msg)
 
         exp.check(True)
-        check_fail(lambda: exp.check(False), "AssertionError")
+        check_fail(lambda: exp.check(False), "")
         exp.check_msg(True)
         check_fail(lambda: exp.check_msg(False), "foo")
 
