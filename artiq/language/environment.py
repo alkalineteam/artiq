@@ -157,6 +157,8 @@ class NumberValue(_SimpleArgProcessor):
                 except AttributeError:
                     raise KeyError("Unit {} is unknown, you must specify "
                                    "the scale manually".format(unit))
+        if scale == 0:
+            raise ValueError("Scale cannot be zero.")
         if step is None:
             step = scale/10.0
         self.unit = unit
