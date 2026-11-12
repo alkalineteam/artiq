@@ -12,11 +12,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1790764873,
-        "narHash": "sha256-OXMmEPPfE/vvBBY5RRs+cABiZiOskCGHE4o7j3MJ/i0=",
+        "lastModified": 1794476903,
+        "narHash": "sha256-xzOMVoFzsQ4ZZRaZ0bBEjhIrkFoqEPQqScgTEoD8F4Y=",
         "ref": "refs/heads/master",
-        "rev": "270ff767bd2e5551e982074c5c1c910b3b5789a6",
-        "revCount": 71,
+        "rev": "919fa37475e16079dcfcbb1552bc75e995319acc",
+        "revCount": 72,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/artiq-comtools.git"
       },
@@ -70,11 +70,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1793351870,
-        "narHash": "sha256-U0QTAptBF+P7L/6ZkdjgyLKiZeWVrUcGjHejrysVs/I=",
+        "lastModified": 1794491277,
+        "narHash": "sha256-ZMuBzea9tAbCnHHJ1mkprkb54GWoZiPuo90ipc7xUFs=",
         "ref": "refs/heads/master",
-        "rev": "49d028b7aefdaa81917e214e09a73ab8ffbfbeef",
-        "revCount": 2517,
+        "rev": "9f4646dcf72083db93fe39c7db4eb2899a6355d2",
+        "revCount": 2526,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/nac3.git"
       },
@@ -107,16 +107,18 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1792094642,
-        "narHash": "sha256-zp8ToDMnqZcu4o4IH9pdwXFXGp7yLm/M0dEnNWnyd7I=",
-        "rev": "fe13242281a67641c0102cdb1087f0ebe586c7df",
-        "revCount": 1093333,
-        "type": "tarball",
-        "url": "https://api.flakehub.com/f/pinned/DeterminateSystems/nixpkgs-weekly/0.1.1093333%2Brev-fe13242281a67641c0102cdb1087f0ebe586c7df/01a17be0-367b-7ae0-8515-6906d89d2794/source.tar.gz"
+        "lastModified": 1794042290,
+        "narHash": "sha256-ziZn2PvCJE5JEEpqTdxXwJpPB+L3YqoCpTAMCzyaP3U=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "f4a03c008967841f2a0b3cb7c436fc6fc31671f6",
+        "type": "github"
       },
       "original": {
-        "type": "tarball",
-        "url": "https://flakehub.com/f/DeterminateSystems/nixpkgs-weekly/0.1"
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
       }
     },
     "root": {
