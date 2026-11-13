@@ -26,7 +26,7 @@ use proto_artiq::{kernel_proto, rpc_proto};
 use kernel_proto::*;
 use board_misoc::csr;
 use riscv::register::{mcause, mepc, mtval};
-use refcounting::{List, RefCounted, RefAwareArray};
+use refcounting::{List, RefCounted, RefAwareArray, String as NAC3String};
 
 fn send(request: &Message) {
     unsafe { mailbox::send(request as *const _ as usize) }
@@ -252,9 +252,9 @@ fn terminate(exceptions: &'static [Option<eh_artiq::Exception<'static>>],
     loop {}
 }
 
-extern fn cache_get(key: CSlice<u8>) -> *mut List<i32> {
+extern fn cache_get(key: NAC3String) -> *mut List<i32> {
     send(&CacheGetRequest {
-        key: str::from_utf8(key.as_ref()).unwrap()
+        key: key.as_str()
     });
 
     recv!(&CacheGetReply { value, len } => {
@@ -267,19 +267,20 @@ extern fn cache_get(key: CSlice<u8>) -> *mut List<i32> {
                     bool
                 ) -> *mut List<i32>
             ).unwrap();
-            wrap(
-                value as *const _ as *mut _,
-                len as usize,
-                false
-            )
+            let value = if len == 0 {
+                core::ptr::null_mut()
+            } else {
+                value as *const _ as *mut _
+            };
+            wrap(value, len as usize, false)
         }
     })
 }
 
-extern "C-unwind" fn cache_put(key: CSlice<u8>, list: &List<i32>) {
+extern "C-unwind" fn cache_put(key: NAC3String, list: &List<i32>) {
     send(&CachePutRequest {
-        key:   str::from_utf8(key.as_ref()).unwrap(),
-        value: list.get_backing_array(),
+        key:   key.as_str(),
+        value: list.get_backing_array().unwrap_or(&RefCounted::<i32>::get_empty_array()),
         len:   list.inner.len
     });
     recv!(&CachePutReply { succeeded } => {
@@ -310,8 +311,8 @@ fn dma_record_flush() {
     }
 }
 
-extern "C-unwind" fn dma_record_start(name: CSlice<u8>) {
-    let name = str::from_utf8(name.as_ref()).unwrap();
+extern "C-unwind" fn dma_record_start(name: NAC3String) {
+    let name = name.as_str();
 
     unsafe {
         if DMA_RECORDER.active {
@@ -421,8 +422,8 @@ extern fn dma_record_output_wide(target: i32, words: &refcounting::List<i32>) {
     }
 }
 
-extern fn dma_erase(name: CSlice<u8>) {
-    let name = str::from_utf8(name.as_ref()).unwrap();
+extern fn dma_erase(name: NAC3String) {
+    let name = name.as_str();
 
     send(&DmaEraseRequest { name: name });
 }
@@ -434,8 +435,8 @@ struct DmaTrace {
     uses_ddma: bool,
 }
 
-extern "C-unwind" fn dma_retrieve(name: CSlice<u8>) -> DmaTrace {
-    let name = str::from_utf8(name.as_ref()).unwrap();
+extern "C-unwind" fn dma_retrieve(name: NAC3String) -> DmaTrace {
+    let name = name.as_str();
 
     send(&DmaRetrieveRequest { name: name });
     recv!(&DmaRetrieveReply { trace, duration, uses_ddma } => {

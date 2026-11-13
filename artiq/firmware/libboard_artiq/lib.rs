@@ -30,6 +30,9 @@ pub mod si549;
 #[cfg(has_grabber)]
 pub mod grabber;
 
+#[cfg(has_eem_power_control)]
+pub mod eem_power_monitor;
+
 #[cfg(has_drtio)]
 pub mod drtioaux;
 pub mod drtio_routing;

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from math import ceil, log2
 from numpy import int32, int64, uint32
-from typing import Generic, TypeVar
 
 from artiq.language.core import *
 from artiq.language.units import us, ns
@@ -85,11 +84,8 @@ class SyncDataEeprom:
             self.io_update_delay = int32(io_update_delay)
 
 
-SyncDataT = TypeVar("SyncDataT", SyncDataUser, SyncDataEeprom)
-
-
 @compile
-class SharedDDS(Generic[SyncDataT]):
+class SharedDDS:
     """DDS configuration device for SU-Servo.
 
     Shared DDS device controls all 4 DDSes on the same Urukul device. Control
@@ -121,8 +117,8 @@ class SharedDDS(Generic[SyncDataT]):
     """
     core: KernelInvariant[Core]
     cpld: KernelInvariant[CPLD[Auto]]
-    _inner_dds: Kernel[AD9910[AD9910SyncData]]
-    sync_data: KernelInvariant[SyncDataT]
+    _inner_dds: Kernel[AD9910]
+    sync_data: KernelInvariant[Auto]
 
     def __init__(self, dmgr, cpld_device,
                  pll_cp=7, pll_vco=5, sync_delay_seeds=[-1, -1, -1, -1],
@@ -265,7 +261,7 @@ class SharedDDS(Generic[SyncDataT]):
 
 
 @compile
-class SUServo(Generic[SyncDataT]):
+class SUServo:
     """Sampler-Urukul Servo parent and configuration device.
 
     Sampler-Urukul Servo is a integrated device controlling one
@@ -302,7 +298,7 @@ class SUServo(Generic[SyncDataT]):
 
     core: KernelInvariant[Core]
     pgia: KernelInvariant[spi.SPIMaster]
-    ddses: KernelInvariant[list[SharedDDS[SyncDataT]]]
+    ddses: KernelInvariant[list[SharedDDS]]
     cplds: KernelInvariant[list[CPLD[Auto]]]
     channel: KernelInvariant[int32]
     gains: Kernel[int32]
@@ -555,7 +551,7 @@ class SUServo(Generic[SyncDataT]):
 
 
 @compile
-class Channel(Generic[SyncDataT]):
+class Channel:
     """Sampler-Urukul Servo channel
 
     :param channel: RTIO channel number
@@ -563,10 +559,10 @@ class Channel(Generic[SyncDataT]):
     """
 
     core: KernelInvariant[Core]
-    servo: KernelInvariant[SUServo[SyncDataT]]
+    servo: KernelInvariant[SUServo]
     channel: KernelInvariant[int32]
     servo_channel: KernelInvariant[int32]
-    dds: KernelInvariant[SharedDDS[SyncDataT]]
+    dds: KernelInvariant[SharedDDS]
 
     def __init__(self, dmgr, channel, servo_device):
         self.servo = dmgr.get(servo_device)

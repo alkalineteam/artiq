@@ -20,6 +20,8 @@ from artiq.coredevice.sampler import Sampler
 from artiq.coredevice.zotino import Zotino
 from artiq.coredevice.fastino import Fastino
 from artiq.coredevice.phaser import Phaser, PHASER_GW_BASE, PHASER_GW_MIQRO
+from artiq.coredevice.phaser_drtio import PhaserMTDDS, PhaserMTDDSChannel
+from artiq.coredevice.hmc542b import HMC542B
 from artiq.coredevice.grabber import Grabber
 from artiq.coredevice.exceptions import GrabberSerialError
 from artiq.coredevice.suservo import (
@@ -356,7 +358,6 @@ class SinaraTester(EnvExperiment):
                 # NAC3TODO raise ValueError("Test and readback attenuator word mismatch")
                 pass
 
-    # NAC3TODO: AD9912 support
     @kernel
     def calibrate_urukul(self, channel: AD9910) -> tuple[int32, int32]:
         self.core.break_realtime()
@@ -368,7 +369,7 @@ class SinaraTester(EnvExperiment):
         return sync_delay, io_update_delay
 
     @kernel
-    def setup_urukul(self, channel: AD9910, frequency: float):
+    def setup_urukul(self, channel: Auto, frequency: float):
         self.core.break_realtime()
         channel.init()
         channel.set(frequency*MHz)
@@ -376,7 +377,7 @@ class SinaraTester(EnvExperiment):
         channel.set_att(6.)
 
     @kernel
-    def cfg_sw_off_urukul(self, channel: AD9910):
+    def cfg_sw_off_urukul(self, channel: Auto):
         self.core.break_realtime()
         channel.cfg_sw(False)
 
@@ -796,28 +797,28 @@ class SinaraTester(EnvExperiment):
 
    
     @kernel
-    def test_phaser_drtio_att(self, att):
+    def test_phaser_drtio_att(self, att: HMC542B):
         self.core.break_realtime()
         for i in range(8):
             test_word = 1 << i
             att.set_att_mu(test_word)
             readback_word = att.get_att_mu()
             if test_word != readback_word:
-                print("Expected: ", test_word, ", readback:", readback_word)
+                print_rpc(("Expected: ", test_word, ", readback:", readback_word))
                 raise ValueError("Test and readback attenuator word mismatch")
 
     @kernel
-    def init_phaser_mtdds_fpga(self, fpga):
+    def init_phaser_mtdds_fpga(self, fpga: PhaserMTDDS):
         self.core.break_realtime()
         fpga.init()
 
     @kernel
-    def init_phaser_mtdds_channel(self, channel):
+    def init_phaser_mtdds_channel(self, channel: PhaserMTDDSChannel):
         self.core.break_realtime()
         channel.init()
 
     @kernel
-    def setup_phaser_mtdds_channel(self, channel, frequencies):
+    def setup_phaser_mtdds_channel(self, channel: PhaserMTDDSChannel, frequencies: list[float]):
         self.core.break_realtime()
         channel.attenuator.set_att(6.0 * dB)
 
@@ -826,54 +827,54 @@ class SinaraTester(EnvExperiment):
         for n in range(f_len):
             # delay to prevent RTIO collision
             channel.ddss[n].set_frequency(frequencies[n])
-            delay(20 * us)
-            channel.ddss[n].set_amplitude(1.0 / f_len)
-            delay(20 * us)
+            self.core.delay(20.0 * us)
+            channel.ddss[n].set_amplitude(1.0 / float(f_len))
+            self.core.delay(20.0 * us)
             channel.ddss[n].enable_phase_accumulator(True)
-            delay(20 * us)
+            self.core.delay(20.0 * us)
 
     @kernel
-    def setup_phaser_mtdds_upconverter(self, channel, frequency):
+    def setup_phaser_mtdds_upconverter(self, channel: PhaserMTDDSChannel, frequency: float):
         self.core.break_realtime()
         channel.upconverter.enable_mixer_rf_output(False)
         channel.upconverter.set_mixer_frequency(frequency)
         channel.upconverter.enable_mixer_rf_output(True)
-        delay(500 * us) # wait for PLL to locks
+        self.core.delay(500.0 * us) # wait for PLL to locks
         if not channel.upconverter_pll_locked():
             raise ValueError("TRF372017 PLL fails to lock")
 
     @kernel
-    def setup_phaser_servo_channel(self, channel, adc_channel):
+    def setup_phaser_servo_channel(self, channel: PhaserMTDDSChannel, adc_channel: int32):
         self.core.break_realtime()
 
         # disable all DDS
         for dds in channel.ddss:
             dds.enable_phase_accumulator(False)
-            delay(20 * us)
+            self.core.delay(20.0 * us)
 
         channel.fpga.set_pgia(adc_channel, 1)
 
         # P servo loop setup
         channel.servo.select_iir_source(adc_channel)
-        delay(20 * us)
+        self.core.delay(20.0 * us)
         channel.servo.set_y1(0, 0.0)  # clear integrator
-        delay(20 * us)
+        self.core.delay(20.0 * us)
         channel.servo.set_iir(0, -0.3, kp=-1.0)  # 3V as setpoint, P = -1
-        delay(20 * us)
+        self.core.delay(20.0 * us)
         channel.servo.set_active_profile(0)
-        delay(20 * us)
+        self.core.delay(20.0 * us)
         channel.servo.enable_iir(True)
-        delay(20 * us)
+        self.core.delay(20.0 * us)
 
         # DDS setup
         channel.attenuator.set_att(10.0 * dB)
         channel.select_dac_source(2)
-        channel.ddss[0].set_frequency(10 * MHz)
-        delay(20 * us)
+        channel.ddss[0].set_frequency(10.0 * MHz)
+        self.core.delay(20.0 * us)
         channel.ddss[0].set_amplitude(1.0)
-        delay(20 * us)
+        self.core.delay(20.0 * us)
         channel.ddss[0].enable_phase_accumulator(True)
-        delay(20 * us)
+        self.core.delay(20.0 * us)
 
     def test_phaser_drtio_mtddss(self):
         print("*** Testing Phaser DRTIO MTDDSs")
@@ -951,7 +952,7 @@ class SinaraTester(EnvExperiment):
         print_rpc(("ROI sums:", n))
 
     @kernel
-    def basler_write_request(self, dev, addr_len, addr, data_len, data):
+    def basler_write_request(self, dev: Grabber, addr_len: int32, addr: int32, data_len: int32, data: int32):
         ftf = (addr_len >> 1) - 1
 
         dev.write_serial(0x01)
@@ -1003,7 +1004,7 @@ class SinaraTester(EnvExperiment):
             self.grabber_capture(card_dev, rois)
 
     @kernel
-    def init_suservo(self, card_dev: SUServoChannel):
+    def init_suservo(self, card_dev: SUServo):
         self.core.break_realtime()
         card_dev.init()
 
@@ -1019,12 +1020,12 @@ class SinaraTester(EnvExperiment):
         return sync_delays[0], sync_delays[1], sync_delays[2], sync_delays[3], io_update_group_delay
 
     @kernel
-    def write_suservo_io_update_delay(self, channel: SUServo, delay_list: list[int32]):
+    def write_suservo_io_update_delay(self, channel: SUServo, delay_list: Option[list[int32]]):
         self.core.break_realtime()
         channel.set_config(enable=False, write_delay=True, io_update_delays=delay_list)
 
     @kernel
-    def setup_suservo_signal_path(self, channel):
+    def setup_suservo_signal_path(self, channel: SUServo):
         self.core.break_realtime()
         # ADC PGIA gain 0
         for i in range(8):
@@ -1253,7 +1254,7 @@ class SinaraTester(EnvExperiment):
         self.core.break_realtime()
         n_dds = len(ddss)
         config.clear((1 << n_dds) - 1)
-        delay(1.*ms)
+        self.core.delay(1.0*ms)
         # Set some waveforms
         i = 1
         ampl_offset = 0x8000 // n_dds
@@ -1269,9 +1270,9 @@ class SinaraTester(EnvExperiment):
                                  chirp=0,
                                  shift=0)
             i += 1
-            delay(1.*ms)
+            self.core.delay(1.0*ms)
         config.trigger((1 << n_dds) - 1)
-        delay(1.*ms)
+        self.core.delay(1.0*ms)
         config.clear(0)
 
     def test_songbirds(self):

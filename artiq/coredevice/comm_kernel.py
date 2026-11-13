@@ -760,12 +760,7 @@ class CommKernel:
 
         if service_id == 0:
             def service(*values):
-                if embedding_map.expects_return:
-                    embedding_map.return_value = values[0]
-                    counter = 1
-                else:
-                    counter = 0
-
+                counter = 0   
                 for obj in embedding_map.attributes_writeback:
                     old_val = obj["obj"]
                     if "fields" in obj:
@@ -775,6 +770,9 @@ class CommKernel:
                     else:
                         old_val[:] = values[counter]
                         counter += 1
+
+                if embedding_map.expects_return and counter < len(values):
+                    embedding_map.return_value = values[counter]
         else:
             service = embedding_map.retrieve_function(service_id)
         logger.debug("rpc service: [%d]%r%s %r %r -> %s", service_id, service,
