@@ -24,7 +24,8 @@ __all__ = [
     "parallel", "legacy_parallel", "sequential",
     "delay_mu", "now_mu", "at_mu",
     "set_watchdog_factory", "watchdog", "TerminationRequested",
-    "rtio_log", "core_log"
+    "rtio_log", "core_log", "subkernel", "subkernel_await", "subkernel_preload",
+    "subkernel_recv", "subkernel_send"
 ]
 
 
@@ -61,6 +62,7 @@ def ceil64(x):
 # Delay NAC3 analysis until all referenced variables are supposed to exist on the CPython side.
 _registered_functions = dict()
 _registered_classes = dict()
+
 
 def _register_function(fun):
     module = getmodule(fun)
@@ -125,6 +127,16 @@ def rpc(arg=None, flags={}):
     return arg
 
 
+def subkernel(function_or_method=None, destination=0, sid=0):
+    if function_or_method is None:
+        def inner_decorator(function):
+            return subkernel(function, destination, sid)
+        return inner_decorator
+    assert 0 < destination < 255
+    _register_function(function_or_method)
+    return function_or_method
+
+
 @rpc(flags={"async"})
 def print_rpc(a: T):
     print(a)
@@ -135,6 +147,20 @@ def core_log(a: T):
 
 
 def rtio_log(channel: str, arg: T):
+    pass
+
+
+# subkernel helpers
+def subkernel_await(subkernel_id: int32, timeout: int64 = 0) -> T:
+    pass
+
+def subkernel_preload(destination: int32, subkernel_id: int32):
+    pass
+
+def subkernel_send(destination: int32, message_id: int32, value: T):
+    pass
+
+def subkernel_recv(message_id: int32, timeout: int64 = 0) -> T:
     pass
 
 

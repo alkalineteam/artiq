@@ -3,9 +3,10 @@ from functools import wraps
 from math import floor, ceil
 import numpy as np
 from numpy import int32, int64, uint32, uint64, float64, bool_, str_, ndarray
-from types import GenericAlias, ModuleType, SimpleNamespace
+from types import GenericAlias, ModuleType, SimpleNamespace, MethodType, FunctionType
 from typing import _GenericAlias, Generic, Literal, TypeVar
 from enum import EnumType, IntEnum
+from inspect import signature
 
 from artiq.language.core import *
 from artiq.language.core import _ConstGenericMarker
@@ -31,6 +32,25 @@ def rtio_get_counter() -> int64:
 @extern
 def test_exception_id_sync(id: int32):
     raise NotImplementedError("syscall not simulated")
+
+
+def signature_to_placeholders(fun):
+    l = []
+    for _, param in signature(fun).parameters.items():
+        if param.name == "self":
+            continue
+        try:
+            l.append(param.annotation(0))
+            continue
+        except:
+            pass
+        try:
+            l.append(param.annotation([]))
+            continue
+        except:
+            pass
+        raise ValueError(f"the type of param '{param.name}' is not supported by subkernels")
+    return l
 
 
 @compile
@@ -99,6 +119,8 @@ class Core:
             "types": {
                 "GenericAlias": GenericAlias,
                 "ModuleType": ModuleType,
+                "FunctionType": FunctionType,
+                "MethodType": MethodType,
             },
 
             "typing": {
@@ -125,6 +147,8 @@ class Core:
                 "np_array": np.array,
                 "np_eye": np.eye,
                 "np_identity": np.identity,
+                "np_arange": np.arange,
+                "np_linspace": np.linspace,
 
                 "np_size": np.size,
                 "np_shape": np.shape,
@@ -215,16 +239,23 @@ class Core:
                 "kernel": kernel,
                 "portable": portable,
                 "rpc": rpc,
+                "subkernel": subkernel,
 
                 # Logging
                 "rtio_log": rtio_log,
                 "core_log": core_log,
+
+                # subkernel helpers
+                "subkernel_await": subkernel_await,
+                "subkernel_preload": subkernel_preload,
+                "subkernel_recv": subkernel_recv,
+                "subkernel_send": subkernel_send,
             },
         }
 
         self.ref_period = ref_period
         self.ref_multiplier = ref_multiplier
-        
+
         self.coarse_ref_period = ref_period*ref_multiplier
         if host is None:
             self.comm = CommKernelDummy()
@@ -237,9 +268,10 @@ class Core:
         self.comm.core = self
 
         self.target = target
+        self.satellite_cpu_targets = satellite_cpu_targets
         self.analyzed = False
         self.compiler = nac3artiq.NAC3(nac3_builtins)
-        
+
         self.analyzer_proxy_name = analyzer_proxy
         self.analyze_at_run_end = analyze_at_run_end
         self.analyzer_proxy = None
@@ -273,16 +305,40 @@ class Core:
             obj = method
             name = ""
 
+        lib = None
+        debug = None
+        
         # NAC3TODO: handle self.report_invariants
         if output_filename is None and debug_filename is None:
-            return self.compiler.compile_method_to_mem(obj, name, args, embedding_map, self.target)
+            lib, debug = self.compiler.compile_method_to_mem(obj, name, args, embedding_map, self.target, 0, 0)
         else:
-            self.compiler.compile_method_to_file(obj, name, args, output_filename, debug_filename, embedding_map, self.target)
+            self.compiler.compile_method_to_file(obj, name, args, output_filename, debug_filename, embedding_map, self.target, 0, 0)
+
+        for func, (destination, subkernel_id) in embedding_map.subkernel_map.items():
+            if hasattr(func, "__self__"):
+                obj = func.__self__
+                name = func.__name__
+            else:
+                obj = func
+                name = ""
+            fname = f"{func.__name__}_{subkernel_id}"
+            placeholders = signature_to_placeholders(func)
+            target = self.satellite_cpu_targets[destination]
+
+            if output_filename is None and debug_filename is None:
+                ret, _ = self.compiler.compile_method_to_mem(obj, name, placeholders, embedding_map, target, subkernel_id, destination)
+                embedding_map.subkernels.append((subkernel_id, destination, ret))
+            else:
+                self.compiler.compile_method_to_file(obj, name, placeholders, fname + ".elf",
+                                                   fname + "_debug.elf", embedding_map, target, subkernel_id, destination)
+
+        return (lib, debug)
 
     def run(self, function, args, kwargs):
         embedding_map = EmbeddingMap()
         kernel_library, debug_object = self.compile(function, args, kwargs, embedding_map)
 
+        self._upload_subkernels(embedding_map)
         self._run_compiled(kernel_library, debug_object, embedding_map)
 
         # set by NAC3
@@ -299,6 +355,14 @@ class Core:
         self.comm.load(kernel_library)
         self.comm.run()
         self.comm.serve(embedding_map, symbolizer)
+
+    def _upload_subkernels(self, embedding_map):
+        if self.first_run:
+            self.comm.check_system_info()
+            self.first_run = False
+
+        for id, dest, lib in embedding_map.subkernels:
+            self.comm.upload_subkernel(lib, id, dest)
 
     def precompile(self, function, *args, **kwargs):
         """Precompile a kernel and return a callable that executes it on the core device

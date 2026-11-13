@@ -6,8 +6,7 @@ from artiq.coredevice.ad9910 import (
     _AD9910_REG_PROFILE0,
     AD9910,
     RAM_DEST_FTW,
-    RAM_MODE_RAMPUP,
-    SyncDataT,
+    RAM_MODE_RAMPUP
 )
 from artiq.coredevice.core import Core
 from artiq.coredevice.urukul import (
@@ -29,10 +28,10 @@ DDS = "urukul_ch0"
 
 
 @compile
-class AD9910Exp(EnvExperiment, Generic[SyncDataT]):
+class AD9910Exp(EnvExperiment):
     core: KernelInvariant[Core]
     cpld: KernelInvariant[UrukulCPLD[Auto]]
-    dev: KernelInvariant[AD9910[SyncDataT]]
+    dev: KernelInvariant[AD9910]
     io_update_device: Kernel[bool]
 
     def build(self, runner, io_update_device=True):

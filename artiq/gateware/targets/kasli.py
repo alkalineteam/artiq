@@ -27,6 +27,7 @@ from artiq.gateware.drtio.siphaser import SiPhaser7Series
 from artiq.gateware.drtio.rx_synchronizer import XilinxRXSynchronizer
 from artiq.gateware.drtio import *
 from artiq.gateware.wrpll import wrpll
+from artiq.gateware.eem_power_control import EEMPowerControl
 from artiq.build_soc import *
 from artiq.coredevice import jsondesc
 
@@ -688,7 +689,11 @@ class GenericStandalone(StandaloneBase):
         self.rtio_channels = []
         eem_7series.add_peripherals(self, description["peripherals"])
         if hw_rev in ("v2.1rc1", "v2.1"):
-            self.comb += self.platform.request("eem_power_en").eq(1)
+            self.submodules.eem_power_control = EEMPowerControl(
+                self.platform.request("eem_power_en"),
+                self.platform.request("eem_fault_n"),
+            )
+            self.csr_devices.append("eem_power_control")
         if hw_rev in ("v1.0", "v1.1"):
             for i in (1, 2):
                 print("SFP LED at RTIO channel 0x{:06x}".format(len(self.rtio_channels)))
@@ -744,7 +749,11 @@ class GenericMaster(MasterBase):
         self.rtio_channels = []
         eem_7series.add_peripherals(self, description["peripherals"])
         if hw_rev in ("v2.1rc1", "v2.1"):
-            self.comb += self.platform.request("eem_power_en").eq(1)
+            self.submodules.eem_power_control = EEMPowerControl(
+                self.platform.request("eem_power_en"),
+                self.platform.request("eem_fault_n"),
+            )
+            self.csr_devices.append("eem_power_control")
         if hw_rev in ("v1.1", "v2.0", "v2.1rc1", "v2.1"):
             for i in range(3):
                 print("USER LED at RTIO channel 0x{:06x}".format(len(self.rtio_channels)))
@@ -795,7 +804,11 @@ class GenericSatellite(SatelliteBase):
         self.rtio_channels = []
         eem_7series.add_peripherals(self, description["peripherals"])
         if hw_rev in ("v2.1rc1", "v2.1"):
-            self.comb += self.platform.request("eem_power_en").eq(1)
+            self.submodules.eem_power_control = EEMPowerControl(
+                self.platform.request("eem_power_en"),
+                self.platform.request("eem_fault_n"),
+            )
+            self.csr_devices.append("eem_power_control")
         if hw_rev in ("v1.1", "v2.0", "v2.1rc1", "v2.1"):
             for i in range(3):
                 print("USER LED at RTIO channel 0x{:06x}".format(len(self.rtio_channels)))

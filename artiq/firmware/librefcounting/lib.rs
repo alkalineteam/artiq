@@ -1,6 +1,6 @@
 #![no_std]
 
-use core::{mem::size_of, slice};
+use core::{mem::size_of, slice, str};
 
 /// The object header prefixed to all composite objects, i.e. structs and tuples.
 #[repr(C)]
@@ -19,7 +19,7 @@ pub struct RefCounted<T> {
 }
 
 impl<T> RefCounted<T> {
-    pub fn empty_array() -> RefCounted<RefAwareArray<T>> {
+    pub const fn get_empty_array() -> RefCounted<RefAwareArray<T>> {
         RefCounted {
             header: ObjectHeader {
                 refcount: 0,
@@ -51,7 +51,7 @@ impl<T> RefAwareArray<T> {
         slice::from_raw_parts_mut(self.data.as_mut_ptr(), len)
     }
 
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         RefAwareArray {
             refcounted_elems: 0,
             _padding: [0; 8usize.saturating_sub(size_of::<usize>())],
@@ -67,18 +67,40 @@ pub struct RawList<T> {
     pub len: u32,
 }
 
+impl<T> RawList<T> {
+    pub fn as_slice(&self) -> &[T] {
+        unsafe { (*self.items).inner.as_slice(self.len as usize) }
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        unsafe { (*self.items).inner.as_mut_slice(self.len as usize) }
+    }
+
+    pub fn get_backing_array(&self) -> Option<&RefCounted<RefAwareArray<T>>> {
+        unsafe { self.items.as_ref() }
+    }
+}
+
 pub type List<T> = RefCounted<RawList<T>>;
 
 impl<T> List<T> {
     pub fn as_slice(&self) -> &[T] {
-        unsafe { (*self.inner.items).inner.as_slice(self.inner.len as usize) }
+        self.inner.as_slice()
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        unsafe { (*self.inner.items).inner.as_mut_slice(self.inner.len as usize) }
+        self.inner.as_mut_slice()
     }
 
-    pub fn get_backing_array(&self) -> &RefCounted<RefAwareArray<T>> {
-        unsafe { &*self.inner.items }
+    pub fn get_backing_array(&self) -> Option<&RefCounted<RefAwareArray<T>>> {
+        self.inner.get_backing_array()
+    }
+}
+
+pub type String = RawList<u8>;
+
+impl String {
+    pub fn as_str(&self) -> &str {
+        str::from_utf8(self.as_slice()).unwrap()
     }
 }

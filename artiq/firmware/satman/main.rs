@@ -775,11 +775,14 @@ fn init_rtio_crg() {
     }
 }
 
-#[cfg(has_grabber)]
+#[cfg(any(has_grabber, has_eem_power_control))]
 fn hardware_tick(ts: &mut u64) {
     let now = clock::get_ms();
     if now > *ts {
+        #[cfg(has_grabber)]
         board_artiq::grabber::tick();
+        #[cfg(has_eem_power_control)]
+        board_artiq::eem_power_monitor::tick();
         *ts = now + 200;
     }
 }
@@ -1014,6 +1017,14 @@ fn startup() {
         }
     });
 
+    #[cfg(has_eem_power_control)]
+    {
+        unsafe {
+            csr::eem_power_control::sw_power_en_write(1);
+        }
+        info!("EEM power enabled");
+    }
+
     #[cfg(has_drtio_eem)]
     {
         drtio_eem::init();
@@ -1033,7 +1044,7 @@ fn startup() {
     let mut rank = 1;
     let mut destination = 1;
 
-    #[cfg(has_grabber)]
+    #[cfg(any(has_grabber, has_eem_power_control))]
     let mut hardware_tick_ts = 0;
 
     #[cfg(all(soc_platform = "efc", has_converter_spi))]
@@ -1055,10 +1066,9 @@ fn startup() {
             #[cfg(soc_platform = "efc")]
             io_expander.service().expect("I2C I/O expander service failed");
             #[cfg(has_grabber)]
-            {
-                hardware_tick(&mut hardware_tick_ts);
-                board_artiq::grabber::uart::worker();
-            }
+            board_artiq::grabber::uart::worker();
+            #[cfg(any(has_grabber, has_eem_power_control))]
+            hardware_tick(&mut hardware_tick_ts);
         }
 
         info!("uplink is up, switching to recovered clock");
@@ -1100,10 +1110,9 @@ fn startup() {
             #[cfg(soc_platform = "efc")]
             io_expander.service().expect("I2C I/O expander service failed");
             #[cfg(has_grabber)]
-            {
-                hardware_tick(&mut hardware_tick_ts);
-                board_artiq::grabber::uart::worker();
-            }
+            board_artiq::grabber::uart::worker();
+            #[cfg(any(has_grabber, has_eem_power_control))]
+            hardware_tick(&mut hardware_tick_ts);
             if drtiosat_tsc_loaded() {
                 info!("TSC loaded from uplink");
                 for rep in repeaters.iter() {

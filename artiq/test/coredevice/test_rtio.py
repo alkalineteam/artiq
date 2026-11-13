@@ -841,8 +841,7 @@ class _DMA(EnvExperiment):
 
     @kernel
     def record(self, for_handle: bool = True):
-        self.core_dma.prepare_record(self.trace_name)
-        with self.core_dma.recorder:
+        with self.core_dma.record(self.trace_name):
             # When not using the handle, retrieving the DMA trace
             # in dma.playback() can be slow. Allow some time.
             if not for_handle:
@@ -859,8 +858,7 @@ class _DMA(EnvExperiment):
     @kernel
     def record_many(self, n: int32):
         t1 = self.core.get_rtio_counter_mu()
-        self.core_dma.prepare_record(self.trace_name)
-        with self.core_dma.recorder:
+        with self.core_dma.record(self.trace_name):
             for i in range(n//2):
                 self.core.delay(100.*ns)
                 self.ttl_out.on()
@@ -902,10 +900,8 @@ class _DMA(EnvExperiment):
 
     @kernel
     def nested(self):
-        self.core_dma.prepare_record(self.trace_name)
-        with self.core_dma.recorder:
-            self.core_dma.prepare_record(self.trace_name)
-            with self.core_dma.recorder:
+        with self.core_dma.record(self.trace_name):
+            with self.core_dma.record(self.trace_name):
                 pass
 
     @kernel
