@@ -79,8 +79,7 @@ class CoreExceptionTraceback(EnvExperiment):
     
     @kernel
     def run(self):
-        self.core_dma.prepare_record(self.trace_name)
-        with self.core_dma.recorder:
+        with self.core_dma.record(self.trace_name):
             pass
         self.core_dma.erase(self.trace_name)
         self.core_dma.playback(self.trace_name)

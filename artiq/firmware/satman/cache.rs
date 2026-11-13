@@ -53,8 +53,7 @@ fn copy_cache_data(source: &RefCounted<RefAwareArray<i32>>,
 }
 
 pub struct Cache {
-    entries: BTreeMap<String, Entry>,
-    empty: Box<RefCounted<RefAwareArray<i32>>>
+    entries: BTreeMap<String, Entry>
 }
 
 impl core::fmt::Debug for Cache {
@@ -67,16 +66,15 @@ impl core::fmt::Debug for Cache {
 
 impl Cache {
     pub fn new() -> Cache {
-        Cache { entries: BTreeMap::new(),
-                empty: Box::new(RefCounted::empty_array()) }
+        Cache { entries: BTreeMap::new() }
     }
 
     pub fn get(&mut self, key: &str) -> (&RefCounted<RefAwareArray<i32>>, u32) {
         match self.entries.get_mut(key) {
-            None => (
-                &(*self.empty),
-                0
-            ),
+            None => {
+                const EMPTY_ARRAY: &RefCounted<RefAwareArray<i32>> = &RefCounted::get_empty_array();
+                (EMPTY_ARRAY, 0)
+            }
             Some(entry) => {
                 entry.borrowed = true;
                 let len = entry.len;

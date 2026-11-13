@@ -320,10 +320,15 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         self.manager.initialize_submission_arguments(self.expurl, arginfo, ui_name)
 
         argeditor_state = self.argeditor.save_state()
-        self.argeditor.deleteLater()
 
         editor_class = self.manager.get_argument_editor_class(self.expurl)
-        self.argeditor = editor_class(self.manager, self, self.expurl)
+        try:
+            argeditor = editor_class(self.manager, self, self.expurl)
+            self.argeditor.deleteLater()
+            self.argeditor = argeditor
+        except Exception:
+            logger.error("Failed to recompute arguments.", exc_info=True)
+            return
         self.layout.addWidget(self.argeditor, 0, 0, 1, 5)
         self.argeditor.restore_state(argeditor_state)
         self.apply_window_color()
